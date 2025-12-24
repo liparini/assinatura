@@ -1,27 +1,42 @@
 const express = require("express");
 const cors = require("cors");
+const fs = require("fs");
 
 const app = express();
 app.use(cors());
-app.use(express.json({ limit: "5mb" }));
+app.use(express.json({ limit: "10mb" }));
 
-const assinaturas = [];
+const FILE = "assinaturas.json";
 
-app.post("/assinaturas", (req, res) => {
-    const { docId, nome, assinatura } = req.body;
-    assinaturas.push({
-        docId,
-        nome,
-        assinatura,
-        data: new Date().toLocaleString()
-    });
-    res.json({ ok: true });
+// salvar assinatura
+app.post("/assinar", (req, res) => {
+  const { documentoId, nome, assinatura } = req.body;
+
+  let dados = [];
+  if (fs.existsSync(FILE)) {
+    dados = JSON.parse(fs.readFileSync(FILE));
+  }
+
+  dados.push({
+    documentoId,
+    nome,
+    assinatura,
+    data: new Date()
+  });
+
+  fs.writeFileSync(FILE, JSON.stringify(dados, null, 2));
+  res.json({ ok: true });
 });
 
-app.get("/assinaturas/:docId", (req, res) => {
-    res.json(assinaturas.filter(a => a.docId === req.params.docId));
+// buscar assinaturas
+app.get("/assinaturas/:id", (req, res) => {
+  if (!fs.existsSync(FILE)) return res.json([]);
+
+  const dados = JSON.parse(fs.readFileSync(FILE));
+  const filtrado = dados.filter(d => d.documentoId === req.params.id);
+  res.json(filtrado);
 });
 
 app.listen(3000, () =>
-    console.log("Backend rodando em http://localhost:3000")
+  console.log("✅ Backend rodando em http://localhost:3000")
 );
