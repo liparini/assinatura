@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="UTF-8">
+<title>Documento com Assinatura via QR Code</title>
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs/qrcode.min.js"></script>
+
+<style>
+body { font-family: Arial; margin: 20px; }
+.assinatura { border-top: 1px dashed #999; margin-top: 10px; padding-top: 10px; }
+</style>
+</head>
+
+<body>
+
+<h2>Documento</h2>
+
+<p><strong>ID do Documento:</strong> <span id="docId"></span></p>
+
+<button onclick="gerarQR()">Gerar QR Code para Assinatura</button>
+<div id="qrcode" style="margin:20px"></div>
+
+<h3>Assinaturas</h3>
+<div id="assinaturas"></div>
+
+<script>
+const API = "http://localhost:3000"; // troque depois pelo backend online
+const docId = crypto.randomUUID();
+document.getElementById("docId").innerText = docId;
+
+function gerarQR() {
+    document.getElementById("qrcode").innerHTML = "";
+    const base = location.href.split("?")[0];
+    const url = base.replace("index.html", "sign.html") + "?doc=" + docId;
+    new QRCode(document.getElementById("qrcode"), url);
+}
+
+function carregarAssinaturas() {
+    fetch(`${API}/assinaturas/${docId}`)
+        .then(r => r.json())
+        .then(lista => {
+            const div = document.getElementById("assinaturas");
+            div.innerHTML = "";
+            lista.forEach(a => {
+                div.innerHTML += `
+                <div class="assinatura">
+                    <strong>${a.nome}</strong><br>
+                    <small>${a.data}</small><br>
+                    <img src="${a.assinatura}" width="200">
+                </div>`;
+            });
+        });
+}
+
+setInterval(carregarAssinaturas, 2000);
+</script>
+
+</body>
+</html>

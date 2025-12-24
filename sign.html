@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="UTF-8">
+<title>Assinatura</title>
+
+<style>
+body { font-family: Arial; margin: 20px; }
+canvas { border: 2px solid #000; touch-action:none; display:none; }
+</style>
+</head>
+
+<body>
+
+<h2>Assinatura do Documento</h2>
+
+<label>Nome do assinante:</label><br>
+<input id="nome"><br><br>
+<button onclick="confirmar()">Confirmar Nome</button>
+
+<p id="info"></p>
+
+<canvas id="canvas" width="400" height="150"></canvas><br>
+
+<button onclick="limpar()">Limpar</button>
+<button onclick="enviar()">Enviar Assinatura</button>
+
+<script>
+const API = "http://localhost:3000"; // troque depois
+const params = new URLSearchParams(location.search);
+const docId = params.get("doc");
+
+let nome = "";
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
+let desenhando = false;
+
+function confirmar() {
+    nome = document.getElementById("nome").value.trim();
+    if (!nome) return alert("Digite o nome");
+    document.getElementById("info").innerText = "Assinante: " + nome;
+    canvas.style.display = "block";
+}
+
+function pos(e) {
+    const r = canvas.getBoundingClientRect();
+    return e.touches
+        ? { x: e.touches[0].clientX - r.left, y: e.touches[0].clientY - r.top }
+        : { x: e.offsetX, y: e.offsetY };
+}
+
+canvas.addEventListener("mousedown", e => {
+    desenhando = true; ctx.beginPath();
+    const p = pos(e); ctx.moveTo(p.x, p.y);
+});
+canvas.addEventListener("mousemove", e => {
+    if (!desenhando) return;
+    const p = pos(e); ctx.lineTo(p.x, p.y); ctx.stroke();
+});
+canvas.addEventListener("mouseup", () => desenhando = false);
+
+canvas.addEventListener("touchstart", e => {
+    desenhando = true; ctx.beginPath();
+    const p = pos(e); ctx.moveTo(p.x, p.y);
+    e.preventDefault();
+},{passive:false});
+canvas.addEventListener("touchmove", e => {
+    if (!desenhando) return;
+    const p = pos(e); ctx.lineTo(p.x, p.y); ctx.stroke();
+    e.preventDefault();
+},{passive:false});
+canvas.addEventListener("touchend", () => desenhando = false);
+
+function limpar() {
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+}
+
+function enviar() {
+    if (!nome) return alert("Confirme o nome");
+    fetch(`${API}/assinaturas`, {
+        method: "POST",
+        headers: { "Content-Type":"application/json" },
+        body: JSON.stringify({
+            docId,
+            nome,
+            assinatura: canvas.toDataURL()
+        })
+    }).then(() => alert("Assinatura enviada com sucesso"));
+}
+</script>
+
+</body>
+</html>
