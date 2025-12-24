@@ -3,19 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Assinatura Digital Multiplataforma</title>
+    <title>Assinatura Digital Restrita</title>
     <style>
         body { font-family: sans-serif; padding: 20px; max-width: 600px; margin: auto; background-color: #f4f4f9; }
         .card { background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); margin-bottom: 20px; }
-        input, button { padding: 12px; margin: 5px 0; width: 100%; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; }
+        input, button { padding: 12px; margin: 5px 0; width: 100%; box-sizing: border-box; border-radius: 4px; }
         button { background-color: #007bff; color: white; font-weight: bold; cursor: pointer; border: none; }
-        button:disabled { background-color: #ccc; }
+        button:disabled { background-color: #ccc; cursor: not-allowed; }
         canvas { border: 2px dashed #999; background: #fff; touch-action: none; width: 100%; height: auto; display: block; }
         .assinado { color: green; font-weight: bold; }
-        #qrcode img { margin: 10px auto; }
         .hidden { display: none; }
         #listaAssinantes { list-style: none; padding: 0; }
-        #listaAssinantes li { background: #eee; margin: 5px 0; padding: 10px; border-radius: 4px; font-size: 14px; overflow-wrap: break-word; }
+        #listaAssinantes li { background: #eee; margin: 5px 0; padding: 10px; border-radius: 4px; }
     </style>
 </head>
 <body>
@@ -24,24 +23,24 @@
     <h2>Nova Pendência</h2>
     <input id="nomeAssinante" placeholder="Nome do assinante">
     <button id="btnAdicionarAssinante">Gerar Link/QR Code</button>
-    <p>ID: <span id="pendenciaId">Nenhuma</span></p>
+    <p>ID da Pendência: <span id="pendenciaIdDisplay">Nenhuma</span></p>
 </div>
 
-<div class="card">
-    <h2>Assinatura Digital</h2>
-    <p id="infoAssinatura">Aguardando seleção...</p>
+<div class="card" id="containerAssinatura">
+    <h2 id="tituloAcao">Assinatura Digital</h2>
+    <p id="infoAssinatura">Aguardando seleção ou QR Code...</p>
     <canvas id="canvas" width="400" height="200"></canvas>
-    <button onclick="limparCanvas()" style="background-color: #6c757d;">Limpar</button>
-    <button id="btnAssinar">Confirmar Assinatura</button>
+    <button onclick="limparCanvas()" id="btnLimpar" style="background-color: #6c757d;">Limpar</button>
+    <button id="btnAssinar" disabled>Confirmar Minha Assinatura</button>
 </div>
 
 <div id="qrcodeArea" class="card hidden" style="text-align: center;">
-    <p>Aponte a câmera do celular para assinar:</p>
-    <div id="qrcode"></div>
+    <p>Peça para o assinante escanear:</p>
+    <div id="qrcode" style="display: flex; justify-content: center;"></div>
 </div>
 
 <div class="card">
-    <h3>Status dos Assinantes</h3>
+    <h3>Status da Lista</h3>
     <ul id="listaAssinantes"></ul>
 </div>
 
@@ -62,9 +61,9 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
 let pendenciaId = null;
-let assinanteAtual = null;
+let assinanteLogadoId = null; // O ID de quem leu o QR Code
 
-// ---------- LOGICA DO CANVAS (TOUCH + MOUSE) ----------
+// ---------- LÓGICA DO CANVAS ----------
 const canvas = document.getElementById("canvas");
 const ctx = canvas.getContext("2d");
 let desenhando = false;
@@ -79,37 +78,69 @@ function obterPosicao(e) {
     };
 }
 
-function iniciarDesenho(e) {
+const iniciarDesenho = (e) => {
+    if (document.getElementById("btnAssinar").disabled) return;
     desenhando = true;
     const pos = obterPosicao(e);
     ctx.beginPath();
     ctx.moveTo(pos.x, pos.y);
-    e.preventDefault();
-}
+    if(e.cancelable) e.preventDefault();
+};
 
-function desenhar(e) {
+const desenhar = (e) => {
     if (!desenhando) return;
     const pos = obterPosicao(e);
     ctx.lineWidth = 2;
     ctx.lineCap = "round";
     ctx.lineTo(pos.x, pos.y);
     ctx.stroke();
-    e.preventDefault();
-}
-
-function pararDesenho() { desenhando = false; }
+    if(e.cancelable) e.preventDefault();
+};
 
 canvas.addEventListener("mousedown", iniciarDesenho);
 canvas.addEventListener("mousemove", desenhar);
-window.addEventListener("mouseup", pararDesenho);
-
+window.addEventListener("mouseup", () => desenhando = false);
 canvas.addEventListener("touchstart", iniciarDesenho, { passive: false });
 canvas.addEventListener("touchmove", desenhar, { passive: false });
-canvas.addEventListener("touchend", pararDesenho);
+canvas.addEventListener("touchend", () => desenhando = false);
 
 window.limparCanvas = () => ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-// ---------- FIRESTORE E QR CODE ----------
+// ---------- CONTROLE DE ACESSO E FIRESTORE ----------
+
+const params = new URLSearchParams(window.location.search);
+const pParam = params.get("p");
+const aParam = params.get("a");
+
+// Se entrou via QR Code
+if (pParam && aParam) {
+    pendenciaId = pParam;
+    assinanteLogadoId = aParam;
+    document.getElementById("areaGerenciamento").classList.add("hidden");
+    document.getElementById("qrcodeArea").classList.add("hidden");
+    configurarModoAssinante();
+}
+
+async function configurarModoAssinante() {
+    const pendRef = doc(db, "pendencias", pendenciaId);
+    const snap = await getDoc(pendRef);
+    
+    if (snap.exists()) {
+        const dados = snap.data();
+        const eu = dados.assinantes.find(x => x.id === assinanteLogadoId);
+        
+        if (eu && eu.status === "PENDENTE") {
+            document.getElementById("infoAssinatura").innerHTML = `Olá <b>${eu.nome}</b>, por favor assine abaixo:`;
+            document.getElementById("btnAssinar").disabled = false;
+        } else {
+            document.getElementById("infoAssinatura").textContent = "Esta assinatura já foi concluída.";
+            document.getElementById("btnAssinar").classList.add("hidden");
+            document.getElementById("btnLimpar").classList.add("hidden");
+            canvas.style.display = "none";
+        }
+        escutarPendencia();
+    }
+}
 
 document.getElementById("btnAdicionarAssinante").onclick = async () => {
     const nome = document.getElementById("nomeAssinante").value.trim();
@@ -122,44 +153,31 @@ document.getElementById("btnAdicionarAssinante").onclick = async () => {
             assinantes: []
         });
         pendenciaId = docRef.id;
-        document.getElementById("pendenciaId").textContent = pendenciaId;
+        document.getElementById("pendenciaIdDisplay").textContent = pendenciaId;
         escutarPendencia();
     }
 
     const pendRef = doc(db, "pendencias", pendenciaId);
     const snap = await getDoc(pendRef);
-    const novoAssinante = {
-        id: crypto.randomUUID(),
-        nome,
-        status: "PENDENTE",
-        hash: "",
-        dataHora: "",
-        imagem: ""
-    };
+    const novoId = crypto.randomUUID();
+    const novoAssinante = { id: novoId, nome, status: "PENDENTE", imagem: "" };
     
     await updateDoc(pendRef, { 
         assinantes: [...snap.data().assinantes, novoAssinante] 
     });
     
-    prepararAssinatura(novoAssinante.id, novoAssinante.nome);
+    gerarQRCodeAdmin(novoId, nome);
     document.getElementById("nomeAssinante").value = "";
 };
 
-window.prepararAssinatura = (id, nome) => {
-    assinanteAtual = id;
-    document.getElementById("infoAssinatura").textContent = "Assinando como: " + nome;
-    document.getElementById("btnAssinar").disabled = false;
+function gerarQRCodeAdmin(id, nome) {
     document.getElementById("qrcodeArea").classList.remove("hidden");
-
-    // Gerar link para o QR Code (funciona em qualquer dispositivo)
+    document.getElementById("infoAssinatura").textContent = "Gerado QR Code para: " + nome;
+    
     const url = `${window.location.origin}${window.location.pathname}?p=${pendenciaId}&a=${id}`;
     document.getElementById("qrcode").innerHTML = "";
-    new QRCode(document.getElementById("qrcode"), {
-        text: url,
-        width: 180,
-        height: 180
-    });
-};
+    new QRCode(document.getElementById("qrcode"), { text: url, width: 150, height: 150 });
+}
 
 function escutarPendencia() {
     onSnapshot(doc(db, "pendencias", pendenciaId), snap => {
@@ -169,11 +187,18 @@ function escutarPendencia() {
         
         data.assinantes.forEach(a => {
             const li = document.createElement("li");
+            const isEu = a.id === assinanteLogadoId;
+            
             if (a.status === "ASSINADO") {
-                li.innerHTML = `<span class="assinado">✓ ${a.nome}</span><br><img src="${a.imagem}" style="width:100px; background:#fff; border:1px solid #ccc">`;
+                li.innerHTML = `<span class="assinado">✓ ${a.nome}</span>`;
             } else {
-                li.innerHTML = `${a.nome} (Pendente) 
-                    <button onclick="prepararAssinatura('${a.id}','${a.nome}')" style="width:auto; padding:5px; font-size:12px">Ver QR</button>`;
+                // Se eu sou o administrador (não tenho assinanteLogadoId), vejo o botão de gerar QR
+                // Se eu sou um assinante, vejo apenas o status dos outros
+                let acao = "";
+                if (!assinanteLogadoId) {
+                    acao = `<button onclick="gerarQRCodeAdmin('${a.id}','${a.nome}')" style="width:auto; margin-left:10px; padding:5px;">QR Code</button>`;
+                }
+                li.innerHTML = `${a.nome} (Pendente) ${acao}`;
             }
             lista.appendChild(li);
         });
@@ -181,38 +206,19 @@ function escutarPendencia() {
 }
 
 document.getElementById("btnAssinar").onclick = async () => {
-    if (!assinanteAtual || !pendenciaId) return;
+    if (!assinanteLogadoId) return alert("Acesso inválido para assinatura.");
     const imagem = canvas.toDataURL("image/png");
     
     const pendRef = doc(db, "pendencias", pendenciaId);
     const snap = await getDoc(pendRef);
     const assinantes = snap.data().assinantes.map(a => 
-        a.id === assinanteAtual ? { ...a, status: "ASSINADO", imagem, dataHora: new Date().toISOString() } : a
+        a.id === assinanteLogadoId ? { ...a, status: "ASSINADO", imagem } : a
     );
 
     await updateDoc(pendRef, { assinantes });
-    alert("Assinado com sucesso!");
-    limparCanvas();
+    alert("Assinatura enviada!");
+    window.location.reload(); // Recarrega para travar a tela
 };
-
-// ---------- DETECÇÃO DE MODO CELULAR (VIA URL) ----------
-const params = new URLSearchParams(window.location.search);
-if (params.has("p") && params.has("a")) {
-    pendenciaId = params.get("p");
-    assinanteAtual = params.get("a");
-    document.getElementById("areaGerenciamento").classList.add("hidden");
-    
-    // Busca nome do assinante para exibir
-    const carregarDados = async () => {
-        const snap = await getDoc(doc(db, "pendencias", pendenciaId));
-        if (snap.exists()) {
-            const user = snap.data().assinantes.find(x => x.id === assinanteAtual);
-            if (user) document.getElementById("infoAssinatura").textContent = "Assinando como: " + user.nome;
-            escutarPendencia();
-        }
-    };
-    carregarDados();
-}
 </script>
 </body>
 </html>
