@@ -42,11 +42,11 @@ import {
   collection,
   addDoc,
   doc,
+  getDoc,
   updateDoc,
   serverTimestamp,
   onSnapshot,
-  query,
-  getDocs
+  query
 } from "https://www.gstatic.com/firebasejs/12.7.0/firebase-firestore.js";
 
 // Configuração Firebase
@@ -101,11 +101,14 @@ document.getElementById("btnAdicionarAssinante").onclick = async () => {
     }
 
     // Adicionar assinante
-    await addDoc(collection(db, "pendencias", pendenciaId, "assinantes"), {
+    const assinanteRef = await addDoc(collection(db, "pendencias", pendenciaId, "assinantes"), {
       nome,
       status: "PENDENTE",
       criadoEm: serverTimestamp()
     });
+
+    // Atualizar QR Code
+    prepararAssinatura(assinanteRef.id, nome);
 
     document.getElementById("nomeAssinante").value = "";
   } catch(err) {
@@ -138,7 +141,6 @@ function escutarPendencia() {
           <img src="${a.imagem}" width="200">
         `;
       } else {
-        // Indica assinante atual se abriu via QR
         const botaoTexto = (docSnap.id === assinanteAtual) ? "Assinar (Você)" : "Assinar";
         li.innerHTML = `${a.nome} <button onclick="prepararAssinatura('${docSnap.id}','${a.nome}')">${botaoTexto}</button>`;
         todosAssinaram = false;
@@ -198,20 +200,38 @@ document.getElementById("btnAssinar").onclick = async () => {
 const params = new URLSearchParams(location.search);
 const pid = params.get("pendenciaId");
 const aid = params.get("assinanteId");
+
 if (pid && aid) {
   pendenciaId = pid;
-  assinanteAtual = aid;
 
-  // Mostrar info do assinante
-  document.getElementById("infoAssinatura").textContent = "Assinando como: " + aid;
+  // Buscar o documento do assinante
+  (async () => {
+    try {
+      const assinanteRef = doc(db, "pendencias", pendenciaId, "assinantes", aid);
+      const snap = await getDoc(assinanteRef);
 
-  // Gerar QR Code
-  const url = `${location.origin}${location.pathname}?pendenciaId=${pendenciaId}&assinanteId=${aid}`;
-  document.getElementById("qrcode").innerHTML = "";
-  new QRCode(document.getElementById("qrcode"), url);
+      if (!snap.exists()) {
+        alert("Assinante não encontrado!");
+        return;
+      }
 
-  // Escutar pendência em tempo real
-  escutarPendencia();
+      const data = snap.data();
+      assinanteAtual = aid;
+      document.getElementById("infoAssinatura").textContent = "Assinando como: " + data.nome;
+
+      // Gerar QR Code único
+      const url = `${location.origin}${location.pathname}?pendenciaId=${pendenciaId}&assinanteId=${aid}`;
+      document.getElementById("qrcode").innerHTML = "";
+      new QRCode(document.getElementById("qrcode"), url);
+
+      // Escutar pendência em tempo real
+      escutarPendencia();
+
+    } catch (err) {
+      console.error(err);
+      alert("Erro ao carregar pendência: " + err.message);
+    }
+  })();
 }
 </script>
 </body>
