@@ -6,7 +6,7 @@
 <style>
 body { font-family: Arial; padding: 20px; }
 input, button { padding: 8px; margin: 5px; }
-canvas { border: 1px solid #ccc; margin-top: 10px; }
+canvas { border: 1px solid #ccc; margin-top: 10px; cursor: crosshair; }
 .assinado { color: green; font-weight: bold; }
 .pendente { color: orange; font-weight: bold; }
 .card { border: 1px solid #ddd; padding: 10px; margin: 10px 0; }
@@ -24,7 +24,7 @@ canvas { border: 1px solid #ccc; margin-top: 10px; }
 <hr>
 
 <h2>Assinaturas</h2>
-<p id="infoAssinatura"></p>
+<p id="infoAssinatura">Selecione um assinante</p>
 <canvas id="canvas" width="400" height="150"></canvas><br>
 <button onclick="limparCanvas()">Limpar</button>
 <button id="btnAssinar">Assinar</button>
@@ -65,8 +65,10 @@ let assinanteAtual = null;
 // ---------- CANVAS ----------
 const canvas = document.getElementById("canvas");
 const ctx = canvas.getContext("2d");
-let desenhando = false;
+canvas.style.pointerEvents = "none"; // inicialmente desabilitado
+document.getElementById("btnAssinar").disabled = true;
 
+let desenhando = false;
 canvas.onmousedown = () => desenhando = true;
 canvas.onmouseup = () => { desenhando = false; ctx.beginPath(); };
 canvas.onmousemove = e => {
@@ -107,7 +109,7 @@ document.getElementById("btnAdicionarAssinante").onclick = async () => {
       criadoEm: serverTimestamp()
     });
 
-    // Atualizar QR Code
+    // Atualizar QR Code e tela
     prepararAssinatura(assinanteRef.id, nome);
 
     document.getElementById("nomeAssinante").value = "";
@@ -159,6 +161,10 @@ window.prepararAssinatura = (id, nome) => {
   assinanteAtual = id;
   document.getElementById("infoAssinatura").textContent = "Assinando como: " + nome;
 
+  // Habilitar canvas e botão
+  canvas.style.pointerEvents = "auto";
+  document.getElementById("btnAssinar").disabled = false;
+
   // QR Code único
   const url = `${location.origin}${location.pathname}?pendenciaId=${pendenciaId}&assinanteId=${id}`;
   document.getElementById("qrcode").innerHTML = "";
@@ -204,7 +210,6 @@ const aid = params.get("assinanteId");
 if (pid && aid) {
   pendenciaId = pid;
 
-  // Buscar o documento do assinante
   (async () => {
     try {
       const assinanteRef = doc(db, "pendencias", pendenciaId, "assinantes", aid);
@@ -217,14 +222,18 @@ if (pid && aid) {
 
       const data = snap.data();
       assinanteAtual = aid;
-      document.getElementById("infoAssinatura").textContent = "Assinando como: " + data.nome;
 
-      // Gerar QR Code único
+      // Atualiza tela
+      document.getElementById("infoAssinatura").textContent = "Assinando como: " + data.nome;
+      canvas.style.pointerEvents = "auto";  // habilita canvas
+      document.getElementById("btnAssinar").disabled = false;
+
+      // QR Code único
       const url = `${location.origin}${location.pathname}?pendenciaId=${pendenciaId}&assinanteId=${aid}`;
       document.getElementById("qrcode").innerHTML = "";
       new QRCode(document.getElementById("qrcode"), url);
 
-      // Escutar pendência em tempo real
+      // Escuta pendência em tempo real
       escutarPendencia();
 
     } catch (err) {
