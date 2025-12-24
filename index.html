@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sistema de Assinatura Digital Corrigido</title>
+    <title>Sistema de Assinatura Digital</title>
     <style>
         body { font-family: sans-serif; padding: 20px; max-width: 700px; margin: auto; background-color: #f4f4f9; color: #333; }
         .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 20px; }
@@ -14,11 +14,11 @@
         canvas { border: 2px dashed #bbb; background: #fff; touch-action: none; width: 100%; height: auto; display: block; border-radius: 4px; }
         .assinado { color: #28a745; font-weight: bold; }
         .hash-text { font-size: 11px; color: #666; word-break: break-all; font-family: monospace; background: #f9f9f9; padding: 5px; border: 1px solid #ddd; margin-top: 5px; }
-        .hidden { display: none; }
+        .hidden { display: none !important; }
         #listaAssinantes { list-style: none; padding: 0; }
         #listaAssinantes li { background: #fff; margin: 15px 0; padding: 15px; border-radius: 6px; border-left: 6px solid #007bff; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
         .assinatura-preview { margin-top: 10px; border: 1px solid #ddd; padding: 5px; background: white; display: block; }
-        .assinatura-preview img { max-width: 100%; height: auto; display: block; background: #fff; }
+        .assinatura-preview img { max-width: 100%; height: auto; display: block; }
         #qrcode { padding: 10px; background: white; display: inline-block; }
     </style>
 </head>
@@ -32,9 +32,9 @@
     <button id="btnExportarPDF" class="btn-pdf hidden">Exportar Relatório PDF</button>
 </div>
 
-<div class="card" id="containerAssinatura">
+<div class="card hidden" id="containerAssinatura">
     <h2>Painel de Assinatura</h2>
-    <p id="infoAssinatura">Aguardando identificação...</p>
+    <p id="infoAssinatura">Carregando...</p>
     <canvas id="canvas" width="500" height="250"></canvas>
     <button onclick="limparCanvas()" id="btnLimpar" style="background-color: #6c757d; margin-top: 15px;">Limpar</button>
     <button id="btnAssinar" disabled>Registrar Minha Assinatura</button>
@@ -73,17 +73,34 @@ let pendenciaId = null;
 let assinanteLogadoId = null;
 let dadosDocumento = null;
 
-// Funções globais para botões dinâmicos
+// Captura parâmetros da URL
+const params = new URLSearchParams(window.location.search);
+const pURL = params.get("p");
+const aURL = params.get("a");
+
+// LÓGICA DE INICIALIZAÇÃO DA TELA
+if (pURL && aURL) {
+    // USUÁRIO EXTERNO (QR CODE)
+    pendenciaId = pURL;
+    assinanteLogadoId = aURL;
+    document.getElementById("areaGerenciamento").classList.add("hidden");
+    document.getElementById("containerAssinatura").classList.remove("hidden");
+    verificarAssinante();
+} else {
+    // MODO ADMINISTRADOR (PC)
+    document.getElementById("areaGerenciamento").classList.remove("hidden");
+    document.getElementById("containerAssinatura").classList.add("hidden");
+}
+
 window.gerarNovoQR = (id, nome) => {
     document.getElementById("qrcodeArea").classList.remove("hidden");
     document.getElementById("nomeNoQr").textContent = "Assinatura: " + nome;
     const url = `${window.location.origin}${window.location.pathname}?p=${pendenciaId}&a=${id}`;
     document.getElementById("qrcode").innerHTML = "";
     new QRCode(document.getElementById("qrcode"), { text: url, width: 200, height: 200 });
-    window.scrollTo(0, document.getElementById("qrcodeArea").offsetTop);
 };
 
-// --- CANVAS ---
+// --- CANVAS (TOUCH E MOUSE) ---
 const canvas = document.getElementById("canvas");
 const ctx = canvas.getContext("2d");
 let desenhando = false;
@@ -122,15 +139,7 @@ canvas.addEventListener("mousemove", (e) => {
 window.addEventListener("mouseup", () => desenhando = false);
 window.limparCanvas = () => ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-// --- FIREBASE LOGIC ---
-const params = new URLSearchParams(window.location.search);
-if (params.has("p") && params.has("a")) {
-    pendenciaId = params.get("p");
-    assinanteLogadoId = params.get("a");
-    document.getElementById("areaGerenciamento").classList.add("hidden");
-    verificarAssinante();
-}
-
+// --- FIREBASE ---
 async function verificarAssinante() {
     const docRef = doc(db, "pendencias", pendenciaId);
     const snap = await getDoc(docRef);
@@ -140,7 +149,7 @@ async function verificarAssinante() {
             document.getElementById("infoAssinatura").innerHTML = `Conectado como: <b>${user.nome}</b>`;
             document.getElementById("btnAssinar").disabled = false;
         } else {
-            document.getElementById("containerAssinatura").innerHTML = "<h3>Assinatura já concluída para este link.</h3>";
+            document.getElementById("containerAssinatura").innerHTML = "<h3>Obrigado! Assinatura já registrada.</h3>";
         }
         escutarPendencia();
     }
@@ -187,7 +196,7 @@ function escutarPendencia() {
                     </div>
                 `;
             } else {
-                let btn = !assinanteLogadoId ? `<button onclick="gerarNovoQR('${a.id}','${a.nome}')" style="width:auto; padding:5px 10px; margin-top:5px;">Trocar para este QR</button>` : "Aguardando...";
+                let btn = !assinanteLogadoId ? `<button onclick="gerarNovoQR('${a.id}','${a.nome}')" style="width:auto; padding:5px 10px; margin-top:5px;">Exibir QR</button>` : "Aguardando assinatura...";
                 li.innerHTML = `<div><strong>${a.nome}</strong> (Pendente)</div> ${btn}`;
             }
             lista.appendChild(li);
@@ -213,7 +222,8 @@ document.getElementById("btnAssinar").onclick = async () => {
 
     await updateDoc(pendRef, { assinantes: novosAssinantes });
     alert("Assinatura enviada com sucesso!");
-    window.location.href = window.location.origin + window.location.pathname;
+    // Redireciona para uma página limpa sem parâmetros de administrador
+    window.location.search = ""; 
 };
 
 // --- PDF ---
@@ -233,6 +243,9 @@ document.getElementById("btnExportarPDF").onclick = () => {
     });
     pdf.save("documento_assinado.pdf");
 };
+
+// Iniciar escuta se já houver ID (para modo admin que recarrega)
+if(pendenciaId) escutarPendencia();
 </script>
 </body>
 </html>
