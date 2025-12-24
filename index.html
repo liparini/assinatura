@@ -44,7 +44,7 @@ canvas { border: 1px solid #000; }
 
 <body>
 
-<h2>Assinatura Externa</h2>
+<h2>Documento para Assinatura</h2>
 
 <label>Nome do assinante:</label><br>
 <input id="nome" placeholder="Nome completo"><br>
@@ -72,35 +72,32 @@ canvas { border: 1px solid #000; }
   </div>
 </div>
 
-<!-- QR CODE -->
+<!-- LIB QR CODE -->
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 
 <script>
-let assinaturas = JSON.parse(localStorage.getItem("assinaturas")) || [];
+let assinaturas = [];
 let atual = null;
 
-// -------------------------
-function salvar() {
-  localStorage.setItem("assinaturas", JSON.stringify(assinaturas));
-}
-
-// -------------------------
+/* =========================
+   ASSINANTES (LOCAL)
+========================= */
 function adicionar() {
   if (!nome.value.trim()) return alert("Informe o nome");
+
   assinaturas.push({
     id: Date.now(),
-    nome: nome.value,
+    nome: nome.value.trim(),
     status: "Pendente",
     hash: null,
     data: null,
     imagem: null
   });
+
   nome.value = "";
-  salvar();
   render();
 }
 
-// -------------------------
 function render() {
   lista.innerHTML = "";
   assinaturas.forEach(a => {
@@ -118,52 +115,59 @@ function render() {
     `;
   });
 }
-render();
 
-// -------------------------
-// ASSINAR LOCAL
-// -------------------------
+/* =========================
+   ASSINAR LOCAL
+========================= */
 function assinarLocal() {
   atual = assinaturas.find(a => a.status === "Pendente");
   if (!atual) return alert("Nenhuma assinatura pendente");
-
   abrirPopup(atual.nome);
 }
 
-// -------------------------
-// QR CODE (ASSINATURA EXTERNA)
-// -------------------------
+/* =========================
+   QR CODE (ASSINATURA EXTERNA)
+========================= */
 function gerarQRCode() {
   atual = assinaturas.find(a => a.status === "Pendente");
   if (!atual) return alert("Nenhuma assinatura pendente");
 
-  const url = `${location.origin}${location.pathname}?assinar=${atual.id}`;
+  const url =
+    `${location.origin}${location.pathname}` +
+    `?assinar=${atual.id}&nome=${encodeURIComponent(atual.nome)}`;
 
   qr.innerHTML = "<h4>Escaneie para assinar</h4>";
   new QRCode(qr, { text: url, width: 180, height: 180 });
 }
 
-// -------------------------
-// VERIFICA SE VEIO DO QR CODE
-// -------------------------
+/* =========================
+   RECEBENDO VIA QR CODE
+========================= */
 const params = new URLSearchParams(location.search);
 const idExterno = params.get("assinar");
+const nomeExterno = params.get("nome");
 
-if (idExterno) {
-  atual = assinaturas.find(a => a.id == idExterno);
-  if (atual && atual.status === "Pendente") {
-    abrirPopup(atual.nome);
-  }
+if (idExterno && nomeExterno) {
+  atual = {
+    id: idExterno,
+    nome: nomeExterno,
+    status: "Pendente",
+    hash: null,
+    data: null,
+    imagem: null
+  };
+  abrirPopup(nomeExterno);
 }
 
-// -------------------------
+/* =========================
+   POPUP / CANVAS
+========================= */
 function abrirPopup(nome) {
   titulo.innerText = "Assinante: " + nome;
   limpar();
   popup.style.display = "flex";
 }
 
-// -------------------------
 const canvas = document.getElementById("canvas");
 const ctx = canvas.getContext("2d");
 let desenhando = false;
@@ -186,12 +190,12 @@ canvas.onmouseup = () => desenhando = false;
 canvas.onmouseleave = () => desenhando = false;
 
 function limpar() {
-  ctx.clearRect(0,0,canvas.width,canvas.height);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
 }
 
-// -------------------------
-// CONFIRMAR ASSINATURA
-// -------------------------
+/* =========================
+   CONFIRMAR ASSINATURA
+========================= */
 async function confirmar() {
   const imagem = canvas.toDataURL("image/png");
 
@@ -213,7 +217,10 @@ async function confirmar() {
   atual.data = new Date().toLocaleString();
   atual.status = "Recebida";
 
-  salvar();
+  const idx = assinaturas.findIndex(a => a.id == atual.id);
+  if (idx >= 0) assinaturas[idx] = atual;
+  else assinaturas.push(atual);
+
   popup.style.display = "none";
   render();
 }
