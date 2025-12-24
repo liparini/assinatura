@@ -37,12 +37,12 @@
 </div>
 
 <div class="card hidden" id="containerAssinatura">
-    <h2>Assinatura Eletrônica</h2>
+    <h2>Assine no campo abaixo:</h2>
     <p id="infoAssinatura"></p>
     <canvas id="canvas" width="600" height="250"></canvas>
     <div style="display: flex; gap: 10px;">
         <button onclick="limparCanvas()" style="background-color: #6c757d;">Limpar</button>
-        <button id="btnAssinar" disabled>Confirmar Assinatura (Azul)</button>
+        <button id="btnAssinar" disabled>Confirmar Assinatura</button>
     </div>
 </div>
 
@@ -53,8 +53,8 @@
 
 <div id="areaAcoesAdmin" class="card hidden admin-footer-area">
     <h3>Painel de Controle</h3>
-    <button id="btnExportarPDF" class="btn-pdf">📥 Baixar Relatório (PDF c/ Assinaturas Azuis)</button>
-    <button id="btnNovoBloco" class="btn-reset">🔄 Finalizar Tudo e Iniciar Novo Bloco</button>
+    <button id="btnExportarPDF" class="btn-pdf">📥 Baixar Relatório</button>
+    <button id="btnNovoBloco" class="btn-reset">🔄 Finalizar</button>
     
     <div style="margin-top: 20px; background: #eee; padding: 15px; border-radius: 8px;">
         <small>Consultar Bloco Antigo:</small>
@@ -263,4 +263,5 @@ init();
 </script>
 </body>
 </html>
+
 
