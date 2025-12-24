@@ -3,68 +3,73 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gerenciador de Assinaturas</title>
+    <title>Sistema de Assinatura Digital</title>
     <style>
-        body { font-family: sans-serif; padding: 20px; max-width: 700px; margin: auto; background-color: #f4f4f9; color: #333; }
-        .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 20px; }
-        input, button { padding: 12px; margin: 8px 0; width: 100%; box-sizing: border-box; border-radius: 6px; border: 1px solid #ccc; font-size: 16px; }
-        button { background-color: #007bff; color: white; font-weight: bold; cursor: pointer; border: none; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 20px; max-width: 750px; margin: auto; background-color: #f0f2f5; color: #1c1e21; }
+        .card { background: white; padding: 25px; border-radius: 12px; box-shadow: 0 8px 16px rgba(0,0,0,0.08); margin-bottom: 20px; border: 1px solid #e0e0e0; }
+        h2, h3 { color: #007bff; margin-top: 0; }
+        input, button { padding: 14px; margin: 8px 0; width: 100%; box-sizing: border-box; border-radius: 8px; border: 1px solid #ddd; font-size: 16px; transition: 0.3s; }
+        input:focus { border-color: #007bff; outline: none; box-shadow: 0 0 0 3px rgba(0,123,255,0.1); }
+        button { background-color: #007bff; color: white; font-weight: 600; cursor: pointer; border: none; }
+        button:hover { background-color: #0056b3; }
         .btn-pdf { background-color: #28a745; }
-        .btn-reset { background-color: #6610f2; }
-        .btn-history { background-color: #6c757d; font-size: 12px; padding: 5px; }
-        canvas { border: 2px dashed #bbb; background: #fff; touch-action: none; width: 100%; height: auto; display: block; border-radius: 4px; }
-        .assinado { color: #28a745; font-weight: bold; }
-        .hash-text { font-size: 10px; color: #666; word-break: break-all; font-family: monospace; background: #f9f9f9; padding: 5px; border: 1px solid #ddd; }
+        .btn-pdf:hover { background-color: #218838; }
+        .btn-reset { background-color: #6f42c1; }
+        canvas { border: 2px solid #dee2e6; background: #ffffff; touch-action: none; width: 100%; height: auto; display: block; border-radius: 8px; cursor: crosshair; }
+        .assinado { color: #28a745; font-weight: bold; display: flex; align-items: center; gap: 5px; }
+        .hash-text { font-size: 10px; color: #6c757d; word-break: break-all; font-family: 'Courier New', Courier, monospace; background: #f8f9fa; padding: 8px; border-radius: 4px; border: 1px solid #eee; margin-top: 8px; }
         .hidden { display: none !important; }
         #listaAssinantes { list-style: none; padding: 0; }
-        #listaAssinantes li { background: #fff; margin: 15px 0; padding: 15px; border-radius: 6px; border-left: 6px solid #007bff; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
-        .assinatura-preview img { max-width: 150px; display: block; margin-top: 10px; }
-        #qrcode { padding: 10px; background: white; display: inline-block; }
+        #listaAssinantes li { background: #fff; margin: 15px 0; padding: 20px; border-radius: 10px; border-left: 6px solid #007bff; box-shadow: 0 4px 6px rgba(0,0,0,0.02); }
+        .assinatura-preview img { max-width: 180px; display: block; margin-top: 12px; border: 1px solid #f0f0f0; padding: 5px; background: #fff; }
+        #qrcode { padding: 15px; background: white; display: inline-block; border: 1px solid #eee; border-radius: 8px; }
+        .admin-footer { margin-top: 25px; padding-top: 20px; border-top: 1px dashed #ccc; display: flex; flex-direction: column; gap: 10px; }
     </style>
 </head>
 <body>
 
 <div id="areaGerenciamento" class="card hidden">
-    <h2>Assinatura Externa</h2>
-    
-    <div id="blocoAtivoInfo" style="font-size: 12px; color: #666; margin-bottom: 10px;"></div>
+    <h2>Assinatura de Usuários Externos</h2>
+    <p id="blocoAtivoInfo" style="font-size: 13px; color: #666;"></p>
 
-    <label>Nome do Assinante:</label>
-    <input id="nomeAssinante" placeholder="Digite o nome completo">
-    <button id="btnAdicionar">Adicionar e Criar QR Code</button>
+    <label>Novo Assinante:</label>
+    <input id="nomeAssinante" placeholder="Nome completo do assinante">
+    <button id="btnAdicionar">Gerar Link de Assinatura</button>
     
-    <hr>
-    
-    <button id="btnExportarPDF" class="btn-pdf hidden">Gerar PDF do Bloco Atual</button>
-    <button id="btnNovoBloco" class="btn-reset">Finalizar e Iniciar Novo Bloco</button>
-    
-    <div style="margin-top: 20px; border-top: 1px solid #ddd; padding-top: 10px;">
-        <small>Consultar Bloco Antigo (Cole o ID):</small>
-        <input id="inputHistorico" placeholder="ID do Bloco">
-        <button onclick="carregarHistorico()" class="btn-history">Consultar</button>
+    <div class="admin-footer">
+        <button id="btnExportarPDF" class="btn-pdf hidden">📥 Baixar Relatório PDF Profissional</button>
+        <button id="btnNovoBloco" class="btn-reset">🔄 Finalizar e Abrir Novo Bloco</button>
+        <div style="display: flex; gap: 10px; align-items: center; margin-top: 10px;">
+            <input id="inputHistorico" placeholder="ID do Bloco Antigo" style="margin:0; flex-grow: 1;">
+            <button onclick="carregarHistorico()" style="width: auto; margin:0; background: #6c757d;">Consultar</button>
+        </div>
     </div>
 </div>
 
 <div class="card hidden" id="containerAssinatura">
-    <h2>Assinatura Digital</h2>
+    <h2>Assinatura Eletrônica</h2>
     <p id="infoAssinatura"></p>
-    <canvas id="canvas" width="500" height="250"></canvas>
-    <button onclick="limparCanvas()" style="background-color: #6c757d; margin-top: 15px;">Limpar Campo</button>
-    <button id="btnAssinar" disabled>Confirmar Assinatura</button>
+    <canvas id="canvas" width="600" height="300"></canvas>
+    <div style="display: flex; gap: 10px;">
+        <button onclick="limparCanvas()" style="background-color: #6c757d;">Limpar</button>
+        <button id="btnAssinar" disabled>Confirmar Assinatura</button>
+    </div>
 </div>
 
 <div id="qrcodeArea" class="card hidden" style="text-align: center;">
     <h3 id="nomeNoQr"></h3>
     <div id="qrcode"></div>
+    <p style="font-size: 13px; color: #666;">Peça ao assinante para escanear este código</p>
 </div>
 
 <div class="card">
-    <h3>Status das Assinaturas</h3>
+    <h3>Lista de Assinaturas</h3>
     <ul id="listaAssinantes"></ul>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js"></script>
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.7.0/firebase-app.js";
@@ -89,7 +94,6 @@ const aURL = params.get("a");
 
 async function init() {
     if (pURL && aURL) {
-        // TELA DO USUÁRIO
         pendenciaId = pURL;
         assinanteLogadoId = aURL;
         const snap = await getDoc(doc(db, "pendencias", pendenciaId));
@@ -97,93 +101,30 @@ async function init() {
             const user = snap.data().assinantes.find(x => x.id === assinanteLogadoId);
             if (user && user.status === "PENDENTE") {
                 document.getElementById("containerAssinatura").classList.remove("hidden");
-                document.getElementById("infoAssinatura").innerHTML = `Olá <b>${user.nome}</b>, por favor assine abaixo:`;
+                document.getElementById("infoAssinatura").innerHTML = `Olá, <b>${user.nome}</b>. Use o campo abaixo para sua assinatura:`;
                 document.getElementById("btnAssinar").disabled = false;
             } else {
-                document.getElementById("containerAssinatura").innerHTML = "<h3>Assinatura confirmada com sucesso!</h3>";
+                document.getElementById("containerAssinatura").innerHTML = "<h3>✅ Assinatura registrada com sucesso!</h3>";
             }
         }
         escutarPendencia();
     } else {
-        // TELA DO ADMIN
         document.getElementById("areaGerenciamento").classList.remove("hidden");
         pendenciaId = localStorage.getItem("pendenciaAtiva");
         if (pendenciaId) {
-            document.getElementById("blocoAtivoInfo").innerText = "Bloco Atual ID: " + pendenciaId;
+            document.getElementById("blocoAtivoInfo").innerText = "ID do Documento Atual: " + pendenciaId;
             escutarPendencia();
         }
     }
 }
 
-// Botão Adicionar (Admin)
-document.getElementById("btnAdicionar").onclick = async () => {
-    const nome = document.getElementById("nomeAssinante").value.trim();
-    if (!nome) return alert("Digite o nome");
-
-    if (!pendenciaId) {
-        const docRef = await addDoc(collection(db, "pendencias"), { status: "ATIVO", criadoEm: serverTimestamp(), assinantes: [] });
-        pendenciaId = docRef.id;
-        localStorage.setItem("pendenciaAtiva", pendenciaId);
-        document.getElementById("blocoAtivoInfo").innerText = "Bloco Atual ID: " + pendenciaId;
-        escutarPendencia();
-    }
-
-    const novoId = crypto.randomUUID();
-    const snap = await getDoc(doc(db, "pendencias", pendenciaId));
-    await updateDoc(doc(db, "pendencias", pendenciaId), {
-        assinantes: [...snap.data().assinantes, { id: novoId, nome, status: "PENDENTE", imagem: "", hash: "", dataHora: "" }]
-    });
-    window.gerarQR(novoId, nome);
-    document.getElementById("nomeAssinante").value = "";
-};
-
-// Finalizar e Novo (Admin)
-document.getElementById("btnNovoBloco").onclick = () => {
-    if(confirm("Isso limpará sua tela para um novo bloco. O ID atual deve ser guardado se quiser consultar depois. Prosseguir?")) {
-        localStorage.removeItem("pendenciaAtiva");
-        window.location.href = window.location.origin + window.location.pathname;
-    }
-};
-
-window.carregarHistorico = () => {
-    const id = document.getElementById("inputHistorico").value.trim();
-    if(id) {
-        pendenciaId = id;
-        localStorage.setItem("pendenciaAtiva", id);
-        location.reload();
-    }
-};
-
-function escutarPendencia() {
-    onSnapshot(doc(db, "pendencias", pendenciaId), (snap) => {
-        if (!snap.exists()) return;
-        const dados = snap.data();
-        const lista = document.getElementById("listaAssinantes");
-        lista.innerHTML = "";
-        
-        let temAssinado = false;
-        dados.assinantes.forEach(a => {
-            const li = document.createElement("li");
-            if (a.status === "ASSINADO") {
-                temAssinado = true;
-                li.innerHTML = `
-                    <span class="assinado">✓ ${a.nome}</span><br>
-                    <small>${a.dataHora}</small>
-                    <div class="hash-text">HASH: ${a.hash}</div>
-                    <div class="assinatura-preview"><img src="${a.imagem}"></div>`;
-            } else {
-                let btn = !pURL ? `<button onclick="window.gerarQR('${a.id}','${a.nome}')" style="width:auto; padding:5px 10px;">QR Code</button>` : "Aguardando...";
-                li.innerHTML = `<div><strong>${a.nome}</strong> (Pendente)</div> ${btn}`;
-            }
-            lista.appendChild(li);
-        });
-        if(temAssinado && !pURL) document.getElementById("btnExportarPDF").classList.remove("hidden");
-    });
-}
-
-// Lógica de Assinatura (Canvas)
+// CANVAS CONFIG (AZUL)
 const canvas = document.getElementById("canvas");
 const ctx = canvas.getContext("2d");
+ctx.strokeStyle = "#0000FF"; // AZUL CANETA
+ctx.lineWidth = 3;
+ctx.lineCap = "round";
+
 let desenhando = false;
 function pos(e) {
     const r = canvas.getBoundingClientRect();
@@ -197,6 +138,128 @@ canvas.addEventListener("touchmove", (e) => { if(!desenhando) return; const p = 
 window.addEventListener("mouseup", () => desenhando = false);
 window.limparCanvas = () => ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+// ADMIN ACTIONS
+document.getElementById("btnAdicionar").onclick = async () => {
+    const nome = document.getElementById("nomeAssinante").value.trim();
+    if (!nome) return alert("Por favor, informe o nome.");
+    if (!pendenciaId) {
+        const docRef = await addDoc(collection(db, "pendencias"), { status: "ATIVO", criadoEm: serverTimestamp(), assinantes: [] });
+        pendenciaId = docRef.id;
+        localStorage.setItem("pendenciaAtiva", pendenciaId);
+        document.getElementById("blocoAtivoInfo").innerText = "ID do Documento Atual: " + pendenciaId;
+        escutarPendencia();
+    }
+    const novoId = crypto.randomUUID();
+    const snap = await getDoc(doc(db, "pendencias", pendenciaId));
+    await updateDoc(doc(db, "pendencias", pendenciaId), {
+        assinantes: [...snap.data().assinantes, { id: novoId, nome, status: "PENDENTE", imagem: "", hash: "", dataHora: "" }]
+    });
+    window.gerarQR(novoId, nome);
+    document.getElementById("nomeAssinante").value = "";
+};
+
+document.getElementById("btnNovoBloco").onclick = () => {
+    if(confirm("Deseja iniciar um novo bloco de assinaturas?")) {
+        localStorage.removeItem("pendenciaAtiva");
+        window.location.href = window.location.origin + window.location.pathname;
+    }
+};
+
+window.carregarHistorico = () => {
+    const id = document.getElementById("inputHistorico").value.trim();
+    if(id) {
+        localStorage.setItem("pendenciaAtiva", id);
+        location.reload();
+    }
+};
+
+function escutarPendencia() {
+    onSnapshot(doc(db, "pendencias", pendenciaId), (snap) => {
+        if (!snap.exists()) return;
+        const dados = snap.data();
+        const lista = document.getElementById("listaAssinantes");
+        lista.innerHTML = "";
+        let assinados = 0;
+        dados.assinantes.forEach(a => {
+            const li = document.createElement("li");
+            if (a.status === "ASSINADO") {
+                assinados++;
+                li.innerHTML = `<div class="assinado">● ${a.nome}</div><small>${a.dataHora}</small><div class="hash-text">Autenticação: ${a.hash}</div><div class="assinatura-preview"><img src="${a.imagem}"></div>`;
+            } else {
+                let btn = !pURL ? `<button onclick="window.gerarQR('${a.id}','${a.nome}')" style="width:auto; padding:5px 10px; font-size:12px;">Gerar QR Code</button>` : "⏳ Aguardando assinatura";
+                li.innerHTML = `<div><strong>${a.nome}</strong> (Pendente)</div> ${btn}`;
+            }
+            lista.appendChild(li);
+        });
+        if(assinados > 0 && !pURL) document.getElementById("btnExportarPDF").classList.remove("hidden");
+    });
+}
+
+// PDF PREMIUM
+document.getElementById("btnExportarPDF").onclick = async () => {
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF();
+    const snap = await getDoc(doc(db, "pendencias", pendenciaId));
+    const d = snap.data();
+
+    // Cabeçalho
+    pdf.setFillColor(245, 247, 250);
+    pdf.rect(0, 0, 210, 40, 'F');
+    pdf.setTextColor(0, 123, 255);
+    pdf.setFontSize(22);
+    pdf.setFont("helvetica", "bold");
+    pdf.text("RELATÓRIO DE ASSINATURAS", 14, 20);
+    
+    pdf.setTextColor(100, 100, 100);
+    pdf.setFontSize(10);
+    pdf.setFont("helvetica", "normal");
+    pdf.text(`ID de Controle: ${pendenciaId}`, 14, 28);
+    pdf.text(`Documento gerado em: ${new Date().toLocaleString()}`, 14, 33);
+
+    let y = 55;
+    d.assinantes.filter(a => a.status === "ASSINADO").forEach((a, i) => {
+        if(y > 230) { pdf.addPage(); y = 20; }
+
+        // Moldura do Assinante
+        pdf.setDrawColor(230, 230, 230);
+        pdf.roundedRect(12, y - 8, 186, 40, 3, 3, 'S');
+
+        pdf.setTextColor(0, 0, 0);
+        pdf.setFontSize(12);
+        pdf.setFont("helvetica", "bold");
+        pdf.text(`${i+1}. ${a.nome}`, 18, y);
+
+        pdf.setFontSize(9);
+        pdf.setFont("helvetica", "normal");
+        pdf.setTextColor(80, 80, 80);
+        pdf.text(`Data/Hora: ${a.dataHora}`, 18, y + 6);
+        
+        pdf.setFontSize(7);
+        pdf.setTextColor(150, 150, 150);
+        pdf.text(`Hash Digital: ${a.hash}`, 18, y + 11);
+
+        // Imagem em Azul
+        pdf.addImage(a.imagem, 'PNG', 140, y - 5, 50, 20);
+
+        y += 45;
+    });
+
+    // Rodapé de autenticidade
+    pdf.setFontSize(8);
+    pdf.setTextColor(180);
+    pdf.text("Este documento possui validade jurídica mediante conferência dos hashes digitais.", 105, 285, null, null, "center");
+
+    pdf.save(`Relatorio_Digital_${pendenciaId.substring(0,5)}.pdf`);
+};
+
+window.gerarQR = (id, nome) => {
+    document.getElementById("qrcodeArea").classList.remove("hidden");
+    document.getElementById("nomeNoQr").innerText = nome;
+    const url = `${window.location.origin}${window.location.pathname}?p=${pendenciaId}&a=${id}`;
+    document.getElementById("qrcode").innerHTML = "";
+    new QRCode(document.getElementById("qrcode"), { text: url, width: 200, height: 200 });
+};
+
 document.getElementById("btnAssinar").onclick = async () => {
     const img = canvas.toDataURL();
     const hBuf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(img));
@@ -206,35 +269,8 @@ document.getElementById("btnAssinar").onclick = async () => {
         a.id === assinanteLogadoId ? { ...a, status: "ASSINADO", imagem: img, hash: hHex, dataHora: new Date().toLocaleString() } : a
     );
     await updateDoc(doc(db, "pendencias", pendenciaId), { assinantes: novos });
-    alert("Assinatura enviada!");
+    alert("Assinatura confirmada!");
     location.reload();
-};
-
-window.gerarQR = (id, nome) => {
-    document.getElementById("qrcodeArea").classList.remove("hidden");
-    document.getElementById("nomeNoQr").innerText = "Assinante: " + nome;
-    const url = `${window.location.origin}${window.location.pathname}?p=${pendenciaId}&a=${id}`;
-    document.getElementById("qrcode").innerHTML = "";
-    new QRCode(document.getElementById("qrcode"), { text: url, width: 200, height: 200 });
-};
-
-document.getElementById("btnExportarPDF").onclick = async () => {
-    const { jsPDF } = window.jspdf;
-    const pdf = new jsPDF();
-    const snap = await getDoc(doc(db, "pendencias", pendenciaId));
-    const d = snap.data();
-    pdf.text("Relatório de Assinaturas", 14, 20);
-    let y = 30;
-    d.assinantes.filter(a => a.status === "ASSINADO").forEach(a => {
-        if(y > 250) { pdf.addPage(); y = 20; }
-        pdf.setFontSize(10);
-        pdf.text(`${a.nome} - ${a.dataHora}`, 14, y);
-        pdf.setFontSize(8);
-        pdf.text(`HASH: ${a.hash}`, 14, y + 5);
-        pdf.addImage(a.imagem, 'PNG', 14, y + 7, 40, 15);
-        y += 35;
-    });
-    pdf.save(`bloco_${pendenciaId}.pdf`);
 };
 
 init();
