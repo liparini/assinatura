@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<title>Assinatura Digital</title>
+<title>Assinatura Digital - Multiassinantes</title>
 
 <style>
 body { font-family: Arial, sans-serif; margin: 20px }
@@ -13,7 +13,15 @@ canvas {
 }
 button { margin: 5px }
 #qrcode { margin-top: 15px }
-.status { font-weight: bold }
+.assinatura {
+  border: 1px solid #ccc;
+  padding: 10px;
+  margin-top: 10px;
+}
+.assinatura img {
+  max-width: 250px;
+  border: 1px solid #000;
+}
 </style>
 </head>
 
@@ -31,20 +39,21 @@ button { margin: 5px }
 
 <div id="qrcode"></div>
 
-<p class="status">Status: <span id="status">Pendente</span></p>
-<p id="hash"></p>
+<p><b>Status:</b> <span id="status">Pendente</span></p>
+
+<h3>Assinaturas realizadas</h3>
+<div id="listaAssinaturas"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs/qrcode.min.js"></script>
 
 <script>
-// ================= CONTEXTO DA PENDÊNCIA =================
+// ================= CONTEXTO =================
 const pendencia = {
-  nome: "",
   status: "Pendente",
   assinaturas: []
 };
 
-// ================= CANVAS COM POINTER EVENTS =================
+// ================= CANVAS (POINTER EVENTS) =================
 const canvas = document.getElementById("canvas");
 const ctx = canvas.getContext("2d");
 let desenhando = false;
@@ -76,11 +85,6 @@ async function gerarHash(texto) {
 
 // ================= GERAR QR CODE =================
 function gerarQRCode() {
-  if (!pendencia.nome) {
-    pendencia.nome = document.getElementById("nome").value;
-    if (!pendencia.nome) return alert("Informe o nome");
-  }
-
   const payload = btoa(JSON.stringify(pendencia));
   const url = `${location.origin}${location.pathname}?p=${payload}`;
 
@@ -95,8 +99,7 @@ const encoded = params.get("p");
 if (encoded) {
   try {
     Object.assign(pendencia, JSON.parse(atob(encoded)));
-    document.getElementById("nome").value = pendencia.nome;
-    document.getElementById("status").innerText = pendencia.status;
+    atualizarLista();
   } catch {
     alert("Pendência inválida");
   }
@@ -104,29 +107,50 @@ if (encoded) {
 
 // ================= ASSINAR =================
 async function assinar() {
-  if (!pendencia.nome) {
-    pendencia.nome = document.getElementById("nome").value;
-    if (!pendencia.nome) return alert("Informe o nome");
-  }
+  const nome = document.getElementById("nome").value;
+  if (!nome) return alert("Informe o nome do assinante");
 
   const imagem = canvas.toDataURL();
-  const dataHora = new Date().toISOString();
+  const dataHora = new Date().toLocaleString("pt-BR");
 
   const hash = await gerarHash(
-    pendencia.nome + imagem + dataHora
+    nome + imagem + dataHora
   );
 
   pendencia.assinaturas.push({
-    imagem,
+    nome,
     dataHora,
-    hash
+    hash,
+    imagem
   });
 
   pendencia.status = "Assinatura recebida";
 
   document.getElementById("status").innerText = pendencia.status;
-  document.getElementById("hash").innerText =
-    "Hash SHA-256: " + hash;
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  atualizarLista();
+}
+
+// ================= ATUALIZAR LISTA =================
+function atualizarLista() {
+  const div = document.getElementById("listaAssinaturas");
+  div.innerHTML = "";
+
+  pendencia.assinaturas.forEach((a, i) => {
+    const bloco = document.createElement("div");
+    bloco.className = "assinatura";
+
+    bloco.innerHTML = `
+      <b>Assinante ${i + 1}</b><br>
+      <b>Nome:</b> ${a.nome}<br>
+      <b>Data/Hora:</b> ${a.dataHora}<br>
+      <b>Hash:</b> ${a.hash}<br><br>
+      <img src="${a.imagem}">
+    `;
+
+    div.appendChild(bloco);
+  });
 }
 </script>
 
