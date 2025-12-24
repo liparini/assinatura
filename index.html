@@ -5,14 +5,15 @@
 <title>Assinatura Digital</title>
 
 <style>
-body { font-family: Arial; margin: 20px }
+body { font-family: Arial, sans-serif; margin: 20px }
 canvas {
   border: 1px solid #000;
   cursor: crosshair;
-  touch-action: none; /* FUNDAMENTAL */
+  touch-action: none;
 }
 button { margin: 5px }
 #qrcode { margin-top: 15px }
+.status { font-weight: bold }
 </style>
 </head>
 
@@ -20,36 +21,34 @@ button { margin: 5px }
 
 <h2>Documento</h2>
 
-<div id="telaPrincipal">
-  <label>Nome do assinante:</label><br>
-  <input id="nome" placeholder="Nome completo"><br><br>
+<label>Nome do assinante:</label><br>
+<input id="nome" placeholder="Nome completo"><br><br>
 
-  <canvas id="canvas" width="320" height="160"></canvas><br>
+<canvas id="canvas" width="320" height="160"></canvas><br>
 
-  <button onclick="assinar()">Assinar nesta tela</button>
-  <button onclick="gerarQRCode()">Assinar por outro dispositivo</button>
+<button onclick="assinar()">Assinar nesta tela</button>
+<button onclick="gerarQRCode()">Assinar por outro dispositivo</button>
 
-  <div id="qrcode"></div>
+<div id="qrcode"></div>
 
-  <p><b>Status:</b> <span id="status">Pendente</span></p>
-  <p id="hash"></p>
-</div>
+<p class="status">Status: <span id="status">Pendente</span></p>
+<p id="hash"></p>
 
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs/qrcode.min.js"></script>
 
 <script>
-// ================= CONTEXTO =================
+// ================= CONTEXTO DA PENDÊNCIA =================
 const pendencia = {
   nome: "",
   status: "Pendente",
   assinaturas: []
 };
 
+// ================= CANVAS COM POINTER EVENTS =================
 const canvas = document.getElementById("canvas");
 const ctx = canvas.getContext("2d");
 let desenhando = false;
 
-// ================= POINTER EVENTS (SOLUÇÃO) =================
 canvas.addEventListener("pointerdown", e => {
   desenhando = true;
   ctx.beginPath();
@@ -66,7 +65,7 @@ canvas.addEventListener("pointermove", e => {
 canvas.addEventListener("pointerup", () => desenhando = false);
 canvas.addEventListener("pointerleave", () => desenhando = false);
 
-// ================= HASH =================
+// ================= HASH SHA-256 =================
 async function gerarHash(texto) {
   const data = new TextEncoder().encode(texto);
   const hash = await crypto.subtle.digest("SHA-256", data);
@@ -75,7 +74,7 @@ async function gerarHash(texto) {
     .join("");
 }
 
-// ================= QR CODE =================
+// ================= GERAR QR CODE =================
 function gerarQRCode() {
   if (!pendencia.nome) {
     pendencia.nome = document.getElementById("nome").value;
@@ -89,7 +88,7 @@ function gerarQRCode() {
   new QRCode(document.getElementById("qrcode"), url);
 }
 
-// ================= LEITURA QR =================
+// ================= LER QR CODE =================
 const params = new URLSearchParams(location.search);
 const encoded = params.get("p");
 
@@ -117,11 +116,17 @@ async function assinar() {
     pendencia.nome + imagem + dataHora
   );
 
-  pendencia.assinaturas.push({ imagem, dataHora, hash });
+  pendencia.assinaturas.push({
+    imagem,
+    dataHora,
+    hash
+  });
+
   pendencia.status = "Assinatura recebida";
 
   document.getElementById("status").innerText = pendencia.status;
-  document.getElementById("hash").innerText = "Hash SHA-256: " + hash;
+  document.getElementById("hash").innerText =
+    "Hash SHA-256: " + hash;
 }
 </script>
 
