@@ -45,7 +45,8 @@ import {
   updateDoc,
   serverTimestamp,
   onSnapshot,
-  query
+  query,
+  getDocs
 } from "https://www.gstatic.com/firebasejs/12.7.0/firebase-firestore.js";
 
 // Configuração Firebase
@@ -137,9 +138,9 @@ function escutarPendencia() {
           <img src="${a.imagem}" width="200">
         `;
       } else {
-        li.innerHTML = `
-          ${a.nome} <button onclick="prepararAssinatura('${docSnap.id}','${a.nome}')">Assinar</button>
-        `;
+        // Indica assinante atual se abriu via QR
+        const botaoTexto = (docSnap.id === assinanteAtual) ? "Assinar (Você)" : "Assinar";
+        li.innerHTML = `${a.nome} <button onclick="prepararAssinatura('${docSnap.id}','${a.nome}')">${botaoTexto}</button>`;
         todosAssinaram = false;
       }
 
@@ -193,13 +194,23 @@ document.getElementById("btnAssinar").onclick = async () => {
   }
 };
 
-// Ler parâmetros de QR
+// ---------- ABRIR VIA QR CODE ----------
 const params = new URLSearchParams(location.search);
 const pid = params.get("pendenciaId");
 const aid = params.get("assinanteId");
 if (pid && aid) {
   pendenciaId = pid;
   assinanteAtual = aid;
+
+  // Mostrar info do assinante
+  document.getElementById("infoAssinatura").textContent = "Assinando como: " + aid;
+
+  // Gerar QR Code
+  const url = `${location.origin}${location.pathname}?pendenciaId=${pendenciaId}&assinanteId=${aid}`;
+  document.getElementById("qrcode").innerHTML = "";
+  new QRCode(document.getElementById("qrcode"), url);
+
+  // Escutar pendência em tempo real
   escutarPendencia();
 }
 </script>
