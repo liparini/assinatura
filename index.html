@@ -2,168 +2,180 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<title>Assinaturas Pendentes</title>
-
+<title>Assinatura Digital</title>
 <style>
-body { font-family: Arial, sans-serif; margin: 20px }
-canvas { border: 1px solid #000; touch-action: none }
-button { margin: 3px }
-.pendente, .assinado {
-  border: 1px solid #ccc;
-  padding: 10px;
-  margin-top: 10px;
-}
-.assinado img {
-  max-width: 250px;
-  border: 1px solid #000;
-}
+body { font-family: Arial; padding: 20px; }
+input, button { padding: 8px; margin: 5px; }
+canvas { border: 1px solid #ccc; }
+.assinado { color: green; font-weight: bold; }
+.pendente { color: orange; font-weight: bold; }
+.card { border: 1px solid #ddd; padding: 10px; margin: 10px 0; }
 </style>
 </head>
 
 <body>
 
-<h2>Gestão de Assinaturas</h2>
-
-<!-- CADASTRO DE ASSINANTE -->
-<input id="novoNome" placeholder="Nome do assinante">
-<button onclick="adicionarAssinante()">Adicionar</button>
-
-<h3>Assinantes</h3>
-<div id="lista"></div>
+<h2>Criar Pendência</h2>
+<input id="nomeAssinante" placeholder="Nome do assinante">
+<button onclick="adicionarAssinante()">Adicionar assinante</button>
+<ul id="listaAssinantes"></ul>
+<button onclick="criarPendencia()">Criar pendência</button>
 
 <hr>
 
-<!-- ÁREA DE ASSINATURA -->
-<div id="areaAssinatura" style="display:none">
-  <h3>Assinar: <span id="assinanteAtual"></span></h3>
+<h2>Status da Pendência</h2>
+<div id="status"></div>
 
-  <canvas id="canvas" width="320" height="160"></canvas><br>
+<hr>
 
-  <button onclick="assinar()">Confirmar Assinatura</button>
-  <div id="qrcode"></div>
-</div>
+<h2>Assinatura</h2>
+<p id="infoAssinatura"></p>
+<canvas id="canvas" width="400" height="150"></canvas><br>
+<button onclick="limpar()">Limpar</button>
+<button onclick="assinar()">Assinar</button>
 
-<script src="https://cdn.jsdelivr.net/npm/qrcodejs/qrcode.min.js"></script>
+<div id="qrcode"></div>
 
-<script>
-// ================= DADOS =================
-const pendencia = {
-  assinantes: []
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.7.0/firebase-app.js";
+import {
+  getFirestore, collection, addDoc, doc, getDoc,
+  updateDoc, onSnapshot
+} from "https://www.gstatic.com/firebasejs/12.7.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyDryNN2dm0n2LCKizWDUoxVUStoiii0s7A",
+  authDomain: "assinatura-3909b.firebaseapp.com",
+  projectId: "assinatura-3909b",
+  storageBucket: "assinatura-3909b.firebasestorage.app",
+  messagingSenderId: "942453294900",
+  appId: "1:942453294900:web:b4404f90f001c9778f0761"
 };
 
-let indiceAtual = null;
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
 
-// ================= CANVAS =================
+let assinantes = [];
+let pendenciaId = null;
+let assinanteAtual = null;
+
+// ---------- CRIAÇÃO ----------
+window.adicionarAssinante = () => {
+  const nome = nomeAssinante.value.trim();
+  if (!nome) return;
+  assinantes.push({ id: crypto.randomUUID(), nome, status: "PENDENTE" });
+  nomeAssinante.value = "";
+  renderLista();
+};
+
+function renderLista() {
+  listaAssinantes.innerHTML = "";
+  assinantes.forEach(a => {
+    const li = document.createElement("li");
+    li.textContent = a.nome;
+    listaAssinantes.appendChild(li);
+  });
+}
+
+window.criarPendencia = async () => {
+  const ref = await addDoc(collection(db, "pendencias"), {
+    criadaEm: new Date(),
+    status: "PENDENTE",
+    assinantes
+  });
+  pendenciaId = ref.id;
+  observar();
+};
+
+// ---------- OBSERVAÇÃO ----------
+function observar() {
+  onSnapshot(doc(db, "pendencias", pendenciaId), snap => {
+    const dados = snap.data();
+    status.innerHTML = "";
+    dados.assinantes.forEach(a => {
+      const div = document.createElement("div");
+      div.className = "card";
+      div.innerHTML = `
+        <b>${a.nome}</b><br>
+        Status: <span class="${a.status === "ASSINADO" ? "assinado" : "pendente"}">${a.status}</span><br>
+        ${a.assinatura ? `
+          Hash: ${a.assinatura.hash}<br>
+          Data: ${new Date(a.assinatura.dataHora).toLocaleString()}<br>
+          <img src="${a.assinatura.imagem}" width="200">
+        ` : `
+          <button onclick="prepararAssinatura('${a.id}')">Assinar</button>
+        `}
+      `;
+      status.appendChild(div);
+    });
+  });
+}
+
+// ---------- ASSINATURA ----------
+window.prepararAssinatura = (id) => {
+  assinanteAtual = id;
+  infoAssinatura.textContent = "Assinando como: " +
+    assinantes.find(a => a.id === id).nome;
+
+  const url = `${location.origin}${location.pathname}?pendenciaId=${pendenciaId}&assinanteId=${id}`;
+  qrcode.innerHTML = "";
+  new QRCode(qrcode, url);
+};
+
 const canvas = document.getElementById("canvas");
 const ctx = canvas.getContext("2d");
 let desenhando = false;
 
-canvas.addEventListener("pointerdown", e => {
-  desenhando = true;
-  ctx.beginPath();
-  ctx.moveTo(e.offsetX, e.offsetY);
-  canvas.setPointerCapture(e.pointerId);
-});
-canvas.addEventListener("pointermove", e => {
+canvas.onmousedown = () => desenhando = true;
+canvas.onmouseup = () => { desenhando = false; ctx.beginPath(); };
+canvas.onmousemove = e => {
   if (!desenhando) return;
+  ctx.lineWidth = 2;
+  ctx.lineCap = "round";
   ctx.lineTo(e.offsetX, e.offsetY);
   ctx.stroke();
-});
-canvas.addEventListener("pointerup", () => desenhando = false);
+  ctx.beginPath();
+  ctx.moveTo(e.offsetX, e.offsetY);
+};
 
-// ================= HASH =================
-async function gerarHash(texto) {
-  const data = new TextEncoder().encode(texto);
-  const hash = await crypto.subtle.digest("SHA-256", data);
-  return Array.from(new Uint8Array(hash))
-    .map(b => b.toString(16).padStart(2, "0"))
-    .join("");
+window.limpar = () => ctx.clearRect(0,0,canvas.width,canvas.height);
+
+async function gerarHash(base64) {
+  const buffer = new TextEncoder().encode(base64);
+  const hash = await crypto.subtle.digest("SHA-256", buffer);
+  return [...new Uint8Array(hash)].map(b => b.toString(16).padStart(2, "0")).join("");
 }
 
-// ================= ADICIONAR ASSINANTE =================
-function adicionarAssinante() {
-  const nome = document.getElementById("novoNome").value;
-  if (!nome) return alert("Informe o nome");
-
-  pendencia.assinantes.push({
-    nome,
-    status: "Pendente",
-    assinatura: null
-  });
-
-  document.getElementById("novoNome").value = "";
-  renderizar();
-}
-
-// ================= RENDER =================
-function renderizar() {
-  const div = document.getElementById("lista");
-  div.innerHTML = "";
-
-  pendencia.assinantes.forEach((a, i) => {
-    const bloco = document.createElement("div");
-    bloco.className = a.status === "Pendente" ? "pendente" : "assinado";
-
-    bloco.innerHTML = `
-      <b>${a.nome}</b><br>
-      Status: ${a.status}<br>
-      ${a.status === "Pendente"
-        ? `<button onclick="abrirAssinatura(${i})">Assinar</button>
-           <button onclick="gerarQR(${i})">QR Code</button>`
-        : `
-          Data/Hora: ${a.assinatura.dataHora}<br>
-          Hash: ${a.assinatura.hash}<br>
-          <img src="${a.assinatura.imagem}">
-        `}
-    `;
-    div.appendChild(bloco);
-  });
-}
-
-// ================= ABRIR ASSINATURA =================
-function abrirAssinatura(i) {
-  indiceAtual = i;
-  document.getElementById("assinanteAtual").innerText =
-    pendencia.assinantes[i].nome;
-
-  document.getElementById("areaAssinatura").style.display = "block";
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-}
-
-// ================= GERAR QR =================
-function gerarQR(i) {
-  const payload = btoa(JSON.stringify({ pendencia, indice: i }));
-  const url = `${location.origin}${location.pathname}?p=${payload}`;
-
-  document.getElementById("qrcode").innerHTML = "";
-  new QRCode(document.getElementById("qrcode"), url);
-}
-
-// ================= LER QR =================
-const params = new URLSearchParams(location.search);
-if (params.get("p")) {
-  const data = JSON.parse(atob(params.get("p")));
-  Object.assign(pendencia, data.pendencia);
-  abrirAssinatura(data.indice);
-  renderizar();
-}
-
-// ================= ASSINAR =================
-async function assinar() {
-  const a = pendencia.assinantes[indiceAtual];
+window.assinar = async () => {
+  if (!assinanteAtual) return alert("Selecione um assinante");
   const imagem = canvas.toDataURL();
-  const dataHora = new Date().toLocaleString("pt-BR");
+  const hash = await gerarHash(imagem);
 
-  const hash = await gerarHash(
-    a.nome + imagem + dataHora
+  const ref = doc(db, "pendencias", pendenciaId);
+  const snap = await getDoc(ref);
+  const dados = snap.data();
+
+  dados.assinantes = dados.assinantes.map(a =>
+    a.id === assinanteAtual
+      ? { ...a, status: "ASSINADO", assinatura: { imagem, hash, dataHora: new Date().toISOString() } }
+      : a
   );
 
-  a.status = "Assinado";
-  a.assinatura = { imagem, dataHora, hash };
+  await updateDoc(ref, { assinantes: dados.assinantes });
+  limpar();
+};
 
-  document.getElementById("areaAssinatura").style.display = "none";
-  document.getElementById("qrcode").innerHTML = "";
-  renderizar();
+// ---------- SUPORTE QR ----------
+const params = new URLSearchParams(location.search);
+const pid = params.get("pendenciaId");
+const aid = params.get("assinanteId");
+
+if (pid && aid) {
+  pendenciaId = pid;
+  assinanteAtual = aid;
+  observar();
 }
 </script>
 
