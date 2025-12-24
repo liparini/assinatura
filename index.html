@@ -2,57 +2,53 @@
 <html lang="pt-br">
 <head>
 <meta charset="UTF-8">
-<title>Documento com Assinatura via QR Code</title>
+<title>Documento com Assinatura</title>
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs/qrcode.min.js"></script>
-
-<style>
-body { font-family: Arial; margin: 20px; }
-.assinatura { border-top: 1px dashed #999; margin-top: 10px; padding-top: 10px; }
-</style>
 </head>
-
 <body>
 
 <h2>Documento</h2>
+<p>Documento de autorização</p>
 
-<p><strong>ID do Documento:</strong> <span id="docId"></span></p>
+<button onclick="gerarQRCode()">Gerar QR Code para assinatura</button>
 
-<button onclick="gerarQR()">Gerar QR Code para Assinatura</button>
-<div id="qrcode" style="margin:20px"></div>
+<div id="qrcode"></div>
 
 <h3>Assinaturas</h3>
 <div id="assinaturas"></div>
 
 <script>
-const API = "http://localhost:3000"; // troque depois pelo backend online
-const docId = crypto.randomUUID();
-document.getElementById("docId").innerText = docId;
+const documentoId = "doc123"; // pode ser dinâmico
 
-function gerarQR() {
-    document.getElementById("qrcode").innerHTML = "";
-    const base = location.href.split("?")[0];
-    const url = base.replace("index.html", "sign.html") + "?doc=" + docId;
-    new QRCode(document.getElementById("qrcode"), url);
+function gerarQRCode() {
+  document.getElementById("qrcode").innerHTML = "";
+
+  const url = `https://SEU-USUARIO.github.io/SEU-REPOSITORIO/sign.html?doc=${documentoId}`;
+
+  new QRCode(document.getElementById("qrcode"), {
+    text: url,
+    width: 200,
+    height: 200
+  });
 }
 
-function carregarAssinaturas() {
-    fetch(`${API}/assinaturas/${docId}`)
-        .then(r => r.json())
-        .then(lista => {
-            const div = document.getElementById("assinaturas");
-            div.innerHTML = "";
-            lista.forEach(a => {
-                div.innerHTML += `
-                <div class="assinatura">
-                    <strong>${a.nome}</strong><br>
-                    <small>${a.data}</small><br>
-                    <img src="${a.assinatura}" width="200">
-                </div>`;
-            });
-        });
+async function carregarAssinaturas() {
+  const res = await fetch(`http://localhost:3000/assinaturas/${documentoId}`);
+  const dados = await res.json();
+
+  const div = document.getElementById("assinaturas");
+  div.innerHTML = "";
+
+  dados.forEach(a => {
+    div.innerHTML += `
+      <p><strong>${a.nome}</strong></p>
+      <img src="${a.assinatura}" width="200">
+      <hr>
+    `;
+  });
 }
 
-setInterval(carregarAssinaturas, 2000);
+setInterval(carregarAssinaturas, 3000);
 </script>
 
 </body>
