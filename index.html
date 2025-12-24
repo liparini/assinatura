@@ -1,193 +1,134 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="pt-br">
 <head>
 <meta charset="UTF-8">
-<title>Assinatura por QR Code</title>
+<title>Assinatura Externa com QR Code</title>
 
 <style>
-body { font-family: Arial; margin: 30px; }
-input, button { padding: 8px; margin: 5px 0; }
-button { cursor: pointer; }
-
-.assinatura {
-  border: 1px solid #ccc;
-  padding: 10px;
-  margin-top: 10px;
-}
-
-.pendente { color: orange; font-weight: bold; }
-.recebida { color: green; font-weight: bold; }
-
-img { border: 1px solid #000; margin-top: 5px; }
-
-#popup {
-  display: none;
-  position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,0.6);
-  justify-content: center;
-  align-items: center;
-}
-
-#box {
-  background: white;
-  padding: 20px;
-  width: 360px;
-  text-align: center;
-}
-
-canvas { border: 1px solid #000; }
-
-#qr { margin-top: 15px; }
+body { font-family: Arial; margin: 20px }
+canvas { border: 1px solid #000 }
+button { margin-top: 10px }
 </style>
 </head>
 
 <body>
 
-<h2>Gerar Pendência de Assinatura</h2>
+<h2>Assinatura Externa</h2>
 
-<label>Nome do assinante:</label><br>
-<input id="nome" placeholder="Nome completo"><br>
-
-<button onclick="gerarPendencia()">Gerar pendência (QR Code)</button>
-
-<div id="qr"></div>
+<div id="telaCriacao">
+  <label>Nome do assinante:</label><br>
+  <input id="nome" placeholder="Nome completo"><br><br>
+  <button onclick="criarPendencia()">Enviar para assinatura externa</button>
+  <div id="qrcode"></div>
+</div>
 
 <hr>
 
-<h3>Status da assinatura</h3>
-<div id="status"></div>
+<div id="telaAssinatura" style="display:none">
+  <h3>Assinatura pendente</h3>
+  <p><strong>Nome:</strong> <span id="nomeAssinante"></span></p>
+  <p><strong>Status:</strong> <span id="status"></span></p>
 
-<!-- POPUP ASSINATURA -->
-<div id="popup">
-  <div id="box">
-    <h3 id="titulo"></h3>
+  <canvas id="canvas" width="300" height="150"></canvas><br>
+  <button onclick="assinar()">Assinar</button>
 
-    <canvas id="canvas" width="300" height="120"></canvas><br>
-    <button onclick="limpar()">Limpar</button><br><br>
-
-    <button onclick="confirmar()">Confirmar assinatura</button>
-  </div>
+  <p id="hash"></p>
 </div>
 
-<!-- QR CODE -->
-<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs/qrcode.min.js"></script>
 
 <script>
-let pendencia = null;
+// ================== UTIL ==================
+function gerarId() {
+  return crypto.randomUUID();
+}
 
-/* =========================
-   GERAR PENDÊNCIA
-========================= */
-function gerarPendencia() {
-  if (!nome.value.trim()) return alert("Informe o nome");
+async function gerarHash(texto) {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(texto);
+  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+  return Array.from(new Uint8Array(hashBuffer))
+    .map(b => b.toString(16).padStart(2, "0"))
+    .join("");
+}
 
-  pendencia = {
-    id: Date.now(),
-    nome: nome.value.trim(),
+// ================== CRIAÇÃO ==================
+function criarPendencia() {
+  const nome = document.getElementById("nome").value;
+  if (!nome) return alert("Informe o nome");
+
+  const id = gerarId();
+
+  const pendencia = {
+    id,
+    nome,
     status: "Pendente",
-    hash: null,
-    data: null,
-    imagem: null
+    assinaturas: []
   };
 
-  const url =
-    `${location.origin}${location.pathname}` +
-    `?assinar=1&nome=${encodeURIComponent(pendencia.nome)}`;
+  localStorage.setItem(id, JSON.stringify(pendencia));
 
-  qr.innerHTML = "<h4>Escaneie para assinar</h4>";
-  new QRCode(qr, { text: url, width: 180, height: 180 });
+  const url = `${location.origin}${location.pathname}?id=${id}`;
 
-  status.innerHTML = `
-    <strong>${pendencia.nome}</strong><br>
-    Status: <span class="pendente">Pendente</span>
-  `;
-
-  nome.value = "";
+  document.getElementById("qrcode").innerHTML = "";
+  new QRCode(document.getElementById("qrcode"), url);
 }
 
-/* =========================
-   LEITURA DO QR CODE
-========================= */
+// ================== LEITURA QR ==================
 const params = new URLSearchParams(location.search);
-const nomeExterno = params.get("nome");
-const assinar = params.get("assinar");
+const id = params.get("id");
 
-if (assinar && nomeExterno) {
-  pendencia = {
-    nome: nomeExterno,
-    status: "Pendente"
-  };
-  abrirPopup(nomeExterno);
+if (id) {
+  document.getElementById("telaCriacao").style.display = "none";
+  document.getElementById("telaAssinatura").style.display = "block";
+
+  const pendencia = JSON.parse(localStorage.getItem(id));
+  if (!pendencia) alert("Pendência não encontrada");
+
+  document.getElementById("nomeAssinante").innerText = pendencia.nome;
+  document.getElementById("status").innerText = pendencia.status;
 }
 
-/* =========================
-   POPUP / CANVAS
-========================= */
-function abrirPopup(nome) {
-  titulo.innerText = "Assinante: " + nome;
-  limpar();
-  popup.style.display = "flex";
-}
-
+// ================== CANVAS ==================
 const canvas = document.getElementById("canvas");
-const ctx = canvas.getContext("2d");
+const ctx = canvas?.getContext("2d");
 let desenhando = false;
 
-canvas.onmousedown = e => {
+canvas?.addEventListener("mousedown", () => {
   desenhando = true;
   ctx.beginPath();
-  const r = canvas.getBoundingClientRect();
-  ctx.moveTo(e.clientX - r.left, e.clientY - r.top);
-};
-
-canvas.onmousemove = e => {
+});
+canvas?.addEventListener("mouseup", () => desenhando = false);
+canvas?.addEventListener("mousemove", e => {
   if (!desenhando) return;
-  const r = canvas.getBoundingClientRect();
-  ctx.lineTo(e.clientX - r.left, e.clientY - r.top);
+  ctx.lineTo(e.offsetX, e.offsetY);
   ctx.stroke();
-};
+});
 
-canvas.onmouseup = () => desenhando = false;
-canvas.onmouseleave = () => desenhando = false;
+// ================== ASSINAR ==================
+async function assinar() {
+  const pendencia = JSON.parse(localStorage.getItem(id));
+  if (!pendencia) return;
 
-function limpar() {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-}
+  const assinaturaBase64 = canvas.toDataURL();
+  const dataHora = new Date().toISOString();
 
-/* =========================
-   CONFIRMAR ASSINATURA
-========================= */
-async function confirmar() {
-  const imagem = canvas.toDataURL("image/png");
-
-  const dados =
-    pendencia.nome +
-    imagem +
-    new Date().toISOString();
-
-  const hashBuffer = await crypto.subtle.digest(
-    "SHA-256",
-    new TextEncoder().encode(dados)
+  const hash = await gerarHash(
+    pendencia.nome + assinaturaBase64 + dataHora
   );
 
-  pendencia.hash = [...new Uint8Array(hashBuffer)]
-    .map(b => b.toString(16).padStart(2,"0"))
-    .join("");
+  pendencia.assinaturas.push({
+    assinatura: assinaturaBase64,
+    dataHora,
+    hash
+  });
 
-  pendencia.imagem = imagem;
-  pendencia.data = new Date().toLocaleString();
-  pendencia.status = "Recebida";
+  pendencia.status = "Assinatura recebida";
 
-  popup.style.display = "none";
+  localStorage.setItem(id, JSON.stringify(pendencia));
 
-  status.innerHTML = `
-    <strong>${pendencia.nome}</strong><br>
-    Status: <span class="recebida">Assinatura recebida</span><br>
-    Data: ${pendencia.data}<br>
-    <small>${pendencia.hash}</small><br>
-    <img src="${pendencia.imagem}" width="200">
-  `;
+  document.getElementById("status").innerText = pendencia.status;
+  document.getElementById("hash").innerText = "Hash SHA-256: " + hash;
 }
 </script>
 
