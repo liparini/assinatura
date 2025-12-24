@@ -10,21 +10,16 @@ canvas { border: 1px solid #ccc; margin-top: 10px; }
 .assinado { color: green; font-weight: bold; }
 .pendente { color: orange; font-weight: bold; }
 .card { border: 1px solid #ddd; padding: 10px; margin: 10px 0; }
+#qrcode { margin-top: 20px; }
 </style>
 </head>
 <body>
 
-<h2>Criar Pendência</h2>
-<input id="titulo" placeholder="Título do documento">
-<button onclick="criarPendencia()">Criar Pendência</button>
-<p>ID da Pendência: <span id="pendenciaId"></span></p>
-
-<hr>
-
-<h2>Adicionar Assinante</h2>
+<h2>Adicionar Assinante à Pendência</h2>
 <input id="nomeAssinante" placeholder="Nome do assinante">
-<button onclick="adicionarAssinante()">Adicionar Assinante</button>
-<ul id="listaAssinantes"></ul>
+<button id="btnAdicionarAssinante">Adicionar Assinante</button>
+
+<p>Pendência ID: <span id="pendenciaId">Nenhuma</span></p>
 
 <hr>
 
@@ -32,9 +27,11 @@ canvas { border: 1px solid #ccc; margin-top: 10px; }
 <p id="infoAssinatura"></p>
 <canvas id="canvas" width="400" height="150"></canvas><br>
 <button onclick="limparCanvas()">Limpar</button>
-<button onclick="assinar()">Assinar</button>
+<button id="btnAssinar">Assinar</button>
 
 <div id="qrcode"></div>
+
+<ul id="listaAssinantes"></ul>
 
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 
@@ -45,99 +42,23 @@ import {
   collection,
   addDoc,
   doc,
-  getDoc,
   getDocs,
   updateDoc,
-  onSnapshot,
   serverTimestamp
 } from "https://www.gstatic.com/firebasejs/12.7.0/firebase-firestore.js";
 
-// CONFIGURAÇÃO DO FIREBASE
+// Configuração Firebase
 const firebaseConfig = {
   apiKey: "AIzaSyDryNN2dm0n2LCKizWDUoxVUStoiii0s7A",
   authDomain: "assinatura-3909b.firebaseapp.com",
   projectId: "assinatura-3909b",
 };
-
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
-// VARIÁVEIS GLOBAIS
+// Variáveis globais
 let pendenciaId = null;
 let assinanteAtual = null;
-
-// ---------- CRIAR PENDÊNCIA ----------
-window.criarPendencia = async () => {
-  const titulo = document.getElementById("titulo").value.trim();
-  if (!titulo) return alert("Informe o título");
-
-  const docRef = await addDoc(collection(db, "pendencias"), {
-    titulo,
-    status: "PENDENTE",
-    criadoEm: serverTimestamp()
-  });
-
-  pendenciaId = docRef.id;
-  document.getElementById("pendenciaId").textContent = pendenciaId;
-
-  alert("Pendência criada!");
-  listarAssinantes();
-};
-
-// ---------- ADICIONAR ASSINANTE ----------
-window.adicionarAssinante = async () => {
-  if (!pendenciaId) return alert("Crie uma pendência primeiro");
-
-  const nome = document.getElementById("nomeAssinante").value.trim();
-  if (!nome) return;
-
-  await addDoc(collection(db, "pendencias", pendenciaId, "assinantes"), {
-    nome,
-    status: "PENDENTE",
-    criadoEm: serverTimestamp()
-  });
-
-  document.getElementById("nomeAssinante").value = "";
-  listarAssinantes();
-};
-
-// ---------- LISTAR ASSINANTES ----------
-async function listarAssinantes() {
-  const lista = document.getElementById("listaAssinantes");
-  lista.innerHTML = "";
-  if (!pendenciaId) return;
-
-  const querySnapshot = await getDocs(collection(db, "pendencias", pendenciaId, "assinantes"));
-
-  querySnapshot.forEach(docSnap => {
-    const a = docSnap.data();
-    const li = document.createElement("li");
-    if (a.status === "ASSINADO") {
-      li.innerHTML = `
-        <b class="assinado">${a.nome}</b><br>
-        Hash: ${a.hash}<br>
-        Data/Hora: ${a.dataHora}<br>
-        <img src="${a.imagem}" width="200">
-      `;
-    } else {
-      li.innerHTML = `
-        ${a.nome} <button onclick="prepararAssinatura('${docSnap.id}','${a.nome}')">Assinar</button>
-      `;
-    }
-    lista.appendChild(li);
-  });
-}
-
-// ---------- PREPARAR ASSINATURA ----------
-window.prepararAssinatura = (id, nome) => {
-  assinanteAtual = id;
-  document.getElementById("infoAssinatura").textContent = "Assinando como: " + nome;
-
-  // QR Code único
-  const url = `${location.origin}${location.pathname}?pendenciaId=${pendenciaId}&assinanteId=${id}`;
-  document.getElementById("qrcode").innerHTML = "";
-  new QRCode(document.getElementById("qrcode"), url);
-};
 
 // ---------- CANVAS ----------
 const canvas = document.getElementById("canvas");
@@ -155,40 +76,128 @@ canvas.onmousemove = e => {
   ctx.beginPath();
   ctx.moveTo(e.offsetX, e.offsetY);
 };
-
 window.limparCanvas = () => ctx.clearRect(0,0,canvas.width,canvas.height);
 
-// ---------- GERAR HASH ----------
+// ---------- FUNÇÕES FIREBASE ----------
+
+// Adicionar assinante (cria pendência automaticamente)
+document.getElementById("btnAdicionarAssinante").onclick = async () => {
+  const nome = document.getElementById("nomeAssinante").value.trim();
+  if (!nome) return alert("Informe o nome do assinante");
+
+  try {
+    // Se não existe pendência, criar pendência
+    if (!pendenciaId) {
+      const docRef = await addDoc(collection(db, "pendencias"), {
+        status: "PENDENTE",
+        criadoEm: serverTimestamp()
+      });
+      pendenciaId = docRef.id;
+      document.getElementById("pendenciaId").textContent = pendenciaId;
+      alert("Pendência criada automaticamente!");
+    }
+
+    // Adicionar assinante
+    await addDoc(collection(db, "pendencias", pendenciaId, "assinantes"), {
+      nome,
+      status: "PENDENTE",
+      criadoEm: serverTimestamp()
+    });
+
+    document.getElementById("nomeAssinante").value = "";
+    listarAssinantes();
+  } catch(err) {
+    console.error(err);
+    alert("Erro: " + err.message);
+  }
+};
+
+// Listar assinantes
+async function listarAssinantes() {
+  const lista = document.getElementById("listaAssinantes");
+  lista.innerHTML = "";
+  if (!pendenciaId) return;
+
+  try {
+    const querySnapshot = await getDocs(collection(db, "pendencias", pendenciaId, "assinantes"));
+    let todosAssinaram = true;
+
+    querySnapshot.forEach(docSnap => {
+      const a = docSnap.data();
+      const li = document.createElement("li");
+
+      if (a.status === "ASSINADO") {
+        li.innerHTML = `
+          <b class="assinado">${a.nome}</b><br>
+          Hash: ${a.hash}<br>
+          Data/Hora: ${a.dataHora}<br>
+          <img src="${a.imagem}" width="200">
+        `;
+      } else {
+        li.innerHTML = `
+          ${a.nome} <button onclick="prepararAssinatura('${docSnap.id}','${a.nome}')">Assinar</button>
+        `;
+        todosAssinaram = false;
+      }
+
+      lista.appendChild(li);
+    });
+
+    // Atualizar status da pendência
+    const refPend = doc(db, "pendencias", pendenciaId);
+    await updateDoc(refPend, { status: todosAssinaram ? "CONCLUIDO" : "PENDENTE" });
+  } catch(err) {
+    console.error(err);
+  }
+}
+
+// Preparar assinatura (selecionar assinante)
+window.prepararAssinatura = (id, nome) => {
+  assinanteAtual = id;
+  document.getElementById("infoAssinatura").textContent = "Assinando como: " + nome;
+
+  // QR Code único
+  const url = `${location.origin}${location.pathname}?pendenciaId=${pendenciaId}&assinanteId=${id}`;
+  document.getElementById("qrcode").innerHTML = "";
+  new QRCode(document.getElementById("qrcode"), url);
+};
+
+// Gerar hash SHA-256
 async function gerarHash(base64) {
   const buffer = new TextEncoder().encode(base64);
   const hash = await crypto.subtle.digest("SHA-256", buffer);
   return [...new Uint8Array(hash)].map(b => b.toString(16).padStart(2,"0")).join("");
 }
 
-// ---------- ASSINAR ----------
-window.assinar = async () => {
+// Assinar
+document.getElementById("btnAssinar").onclick = async () => {
   if (!assinanteAtual) return alert("Selecione um assinante");
 
   const imagem = canvas.toDataURL();
   const hash = await gerarHash(imagem);
 
-  const ref = doc(db, "pendencias", pendenciaId, "assinantes", assinanteAtual);
-  await updateDoc(ref, {
-    status: "ASSINADO",
-    hash,
-    imagem,
-    dataHora: new Date().toLocaleString()
-  });
+  try {
+    const ref = doc(db, "pendencias", pendenciaId, "assinantes", assinanteAtual);
+    await updateDoc(ref, {
+      status: "ASSINADO",
+      hash,
+      imagem,
+      dataHora: new Date().toLocaleString()
+    });
 
-  limparCanvas();
-  listarAssinantes();
+    limparCanvas();
+    listarAssinantes();
+    alert("Assinatura registrada com sucesso!");
+  } catch(err) {
+    console.error(err);
+    alert("Erro ao assinar: " + err.message);
+  }
 };
 
-// ---------- LER PARAMETROS QR ----------
+// Ler parâmetros de QR
 const params = new URLSearchParams(location.search);
 const pid = params.get("pendenciaId");
 const aid = params.get("assinanteId");
-
 if (pid && aid) {
   pendenciaId = pid;
   assinanteAtual = aid;
