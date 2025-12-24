@@ -6,7 +6,7 @@
 
 <style>
 body { font-family: Arial; margin: 20px }
-canvas { border: 1px solid #000; cursor: crosshair }
+canvas { border: 1px solid #000; cursor: crosshair; touch-action: none }
 button { margin: 5px }
 #qrcode { margin-top: 15px }
 </style>
@@ -16,7 +16,6 @@ button { margin: 5px }
 
 <h2>Documento</h2>
 
-<!-- TELA PRINCIPAL (CRIA + ASSINA) -->
 <div id="telaPrincipal">
   <label>Nome do assinante:</label><br>
   <input id="nome" placeholder="Nome completo"><br><br>
@@ -35,12 +34,14 @@ button { margin: 5px }
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs/qrcode.min.js"></script>
 
 <script>
-// ================= CONTEXTO DA PENDÊNCIA =================
+// ================= CONTEXTO =================
 const pendencia = {
   nome: "",
   status: "Pendente",
   assinaturas: []
 };
+
+let canvas, ctx, desenhando = false;
 
 // ================= HASH =================
 async function gerarHash(texto) {
@@ -51,11 +52,53 @@ async function gerarHash(texto) {
     .join("");
 }
 
+// ================= CANVAS INIT =================
+function iniciarCanvas() {
+  canvas = document.getElementById("canvas");
+  ctx = canvas.getContext("2d");
+
+  ctx.lineWidth = 2;
+  ctx.lineCap = "round";
+
+  canvas.onmousedown = () => {
+    desenhando = true;
+    ctx.beginPath();
+  };
+
+  canvas.onmouseup = () => desenhando = false;
+
+  canvas.onmousemove = e => {
+    if (!desenhando) return;
+    ctx.lineTo(e.offsetX, e.offsetY);
+    ctx.stroke();
+  };
+
+  // MOBILE
+  canvas.ontouchstart = e => {
+    desenhando = true;
+    const t = e.touches[0];
+    const r = canvas.getBoundingClientRect();
+    ctx.beginPath();
+    ctx.moveTo(t.clientX - r.left, t.clientY - r.top);
+  };
+
+  canvas.ontouchmove = e => {
+    if (!desenhando) return;
+    const t = e.touches[0];
+    const r = canvas.getBoundingClientRect();
+    ctx.lineTo(t.clientX - r.left, t.clientY - r.top);
+    ctx.stroke();
+    e.preventDefault();
+  };
+
+  canvas.ontouchend = () => desenhando = false;
+}
+
 // ================= QR CODE =================
 function gerarQRCode() {
   if (!pendencia.nome) {
     pendencia.nome = document.getElementById("nome").value;
-    if (!pendencia.nome) return alert("Informe o nome antes");
+    if (!pendencia.nome) return alert("Informe o nome");
   }
 
   const payload = btoa(JSON.stringify(pendencia));
@@ -65,37 +108,19 @@ function gerarQRCode() {
   new QRCode(document.getElementById("qrcode"), url);
 }
 
-// ================= LEITURA DO QR =================
+// ================= LEITURA QR =================
 const params = new URLSearchParams(location.search);
 const encoded = params.get("p");
 
 if (encoded) {
   try {
-    const data = JSON.parse(atob(encoded));
-    Object.assign(pendencia, data);
-
+    Object.assign(pendencia, JSON.parse(atob(encoded)));
     document.getElementById("nome").value = pendencia.nome;
     document.getElementById("status").innerText = pendencia.status;
   } catch {
     alert("Pendência inválida");
   }
 }
-
-// ================= CANVAS =================
-const canvas = document.getElementById("canvas");
-const ctx = canvas.getContext("2d");
-let desenhando = false;
-
-canvas.addEventListener("mousedown", () => {
-  desenhando = true;
-  ctx.beginPath();
-});
-canvas.addEventListener("mouseup", () => desenhando = false);
-canvas.addEventListener("mousemove", e => {
-  if (!desenhando) return;
-  ctx.lineTo(e.offsetX, e.offsetY);
-  ctx.stroke();
-});
 
 // ================= ASSINAR =================
 async function assinar() {
@@ -111,17 +136,15 @@ async function assinar() {
     pendencia.nome + imagem + dataHora
   );
 
-  pendencia.assinaturas.push({
-    imagem,
-    dataHora,
-    hash
-  });
-
+  pendencia.assinaturas.push({ imagem, dataHora, hash });
   pendencia.status = "Assinatura recebida";
 
   document.getElementById("status").innerText = pendencia.status;
   document.getElementById("hash").innerText = "Hash SHA-256: " + hash;
 }
+
+// ================= START =================
+iniciarCanvas();
 </script>
 
 </body>
