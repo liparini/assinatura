@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<title>Assinatura Local ou Externa</title>
+<title>Assinatura por QR Code</title>
 
 <style>
 body { font-family: Arial; margin: 30px; }
@@ -44,21 +44,19 @@ canvas { border: 1px solid #000; }
 
 <body>
 
-<h2>Documento para Assinatura</h2>
+<h2>Gerar Pendência de Assinatura</h2>
 
 <label>Nome do assinante:</label><br>
 <input id="nome" placeholder="Nome completo"><br>
 
-<button onclick="adicionar()">Adicionar assinante</button>
-
-<h3>Assinaturas</h3>
-<div id="lista"></div>
-
-<br>
-<button onclick="assinarLocal()">Assinar nesta tela</button>
-<button onclick="gerarQRCode()">Assinar por outro dispositivo</button>
+<button onclick="gerarPendencia()">Gerar pendência (QR Code)</button>
 
 <div id="qr"></div>
+
+<hr>
+
+<h3>Status da assinatura</h3>
+<div id="status"></div>
 
 <!-- POPUP ASSINATURA -->
 <div id="popup">
@@ -72,89 +70,53 @@ canvas { border: 1px solid #000; }
   </div>
 </div>
 
-<!-- LIB QR CODE -->
+<!-- QR CODE -->
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 
 <script>
-let assinaturas = [];
-let atual = null;
+let pendencia = null;
 
 /* =========================
-   ASSINANTES (LOCAL)
+   GERAR PENDÊNCIA
 ========================= */
-function adicionar() {
+function gerarPendencia() {
   if (!nome.value.trim()) return alert("Informe o nome");
 
-  assinaturas.push({
+  pendencia = {
     id: Date.now(),
     nome: nome.value.trim(),
     status: "Pendente",
     hash: null,
     data: null,
     imagem: null
-  });
-
-  nome.value = "";
-  render();
-}
-
-function render() {
-  lista.innerHTML = "";
-  assinaturas.forEach(a => {
-    lista.innerHTML += `
-      <div class="assinatura">
-        <strong>${a.nome}</strong><br>
-        Status:
-        <span class="${a.status === "Recebida" ? "recebida" : "pendente"}">
-          ${a.status}
-        </span><br>
-        ${a.data || ""}<br>
-        ${a.hash ? "<small>"+a.hash+"</small><br>" : ""}
-        ${a.imagem ? `<img src="${a.imagem}" width="200">` : ""}
-      </div>
-    `;
-  });
-}
-
-/* =========================
-   ASSINAR LOCAL
-========================= */
-function assinarLocal() {
-  atual = assinaturas.find(a => a.status === "Pendente");
-  if (!atual) return alert("Nenhuma assinatura pendente");
-  abrirPopup(atual.nome);
-}
-
-/* =========================
-   QR CODE (ASSINATURA EXTERNA)
-========================= */
-function gerarQRCode() {
-  atual = assinaturas.find(a => a.status === "Pendente");
-  if (!atual) return alert("Nenhuma assinatura pendente");
+  };
 
   const url =
     `${location.origin}${location.pathname}` +
-    `?assinar=${atual.id}&nome=${encodeURIComponent(atual.nome)}`;
+    `?assinar=1&nome=${encodeURIComponent(pendencia.nome)}`;
 
   qr.innerHTML = "<h4>Escaneie para assinar</h4>";
   new QRCode(qr, { text: url, width: 180, height: 180 });
+
+  status.innerHTML = `
+    <strong>${pendencia.nome}</strong><br>
+    Status: <span class="pendente">Pendente</span>
+  `;
+
+  nome.value = "";
 }
 
 /* =========================
-   RECEBENDO VIA QR CODE
+   LEITURA DO QR CODE
 ========================= */
 const params = new URLSearchParams(location.search);
-const idExterno = params.get("assinar");
 const nomeExterno = params.get("nome");
+const assinar = params.get("assinar");
 
-if (idExterno && nomeExterno) {
-  atual = {
-    id: idExterno,
+if (assinar && nomeExterno) {
+  pendencia = {
     nome: nomeExterno,
-    status: "Pendente",
-    hash: null,
-    data: null,
-    imagem: null
+    status: "Pendente"
   };
   abrirPopup(nomeExterno);
 }
@@ -200,7 +162,7 @@ async function confirmar() {
   const imagem = canvas.toDataURL("image/png");
 
   const dados =
-    atual.nome +
+    pendencia.nome +
     imagem +
     new Date().toISOString();
 
@@ -209,20 +171,23 @@ async function confirmar() {
     new TextEncoder().encode(dados)
   );
 
-  atual.hash = [...new Uint8Array(hashBuffer)]
+  pendencia.hash = [...new Uint8Array(hashBuffer)]
     .map(b => b.toString(16).padStart(2,"0"))
     .join("");
 
-  atual.imagem = imagem;
-  atual.data = new Date().toLocaleString();
-  atual.status = "Recebida";
-
-  const idx = assinaturas.findIndex(a => a.id == atual.id);
-  if (idx >= 0) assinaturas[idx] = atual;
-  else assinaturas.push(atual);
+  pendencia.imagem = imagem;
+  pendencia.data = new Date().toLocaleString();
+  pendencia.status = "Recebida";
 
   popup.style.display = "none";
-  render();
+
+  status.innerHTML = `
+    <strong>${pendencia.nome}</strong><br>
+    Status: <span class="recebida">Assinatura recebida</span><br>
+    Data: ${pendencia.data}<br>
+    <small>${pendencia.hash}</small><br>
+    <img src="${pendencia.imagem}" width="200">
+  `;
 }
 </script>
 
