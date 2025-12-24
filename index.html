@@ -42,9 +42,10 @@ import {
   collection,
   addDoc,
   doc,
-  getDocs,
   updateDoc,
-  serverTimestamp
+  serverTimestamp,
+  onSnapshot,
+  query
 } from "https://www.gstatic.com/firebasejs/12.7.0/firebase-firestore.js";
 
 // Configuração Firebase
@@ -78,7 +79,7 @@ canvas.onmousemove = e => {
 };
 window.limparCanvas = () => ctx.clearRect(0,0,canvas.width,canvas.height);
 
-// ---------- FUNÇÕES FIREBASE ----------
+// ---------- FUNÇÕES FIRESTORE ----------
 
 // Adicionar assinante (cria pendência automaticamente)
 document.getElementById("btnAdicionarAssinante").onclick = async () => {
@@ -95,6 +96,7 @@ document.getElementById("btnAdicionarAssinante").onclick = async () => {
       pendenciaId = docRef.id;
       document.getElementById("pendenciaId").textContent = pendenciaId;
       alert("Pendência criada automaticamente!");
+      escutarPendencia();
     }
 
     // Adicionar assinante
@@ -105,24 +107,25 @@ document.getElementById("btnAdicionarAssinante").onclick = async () => {
     });
 
     document.getElementById("nomeAssinante").value = "";
-    listarAssinantes();
   } catch(err) {
     console.error(err);
     alert("Erro: " + err.message);
   }
 };
 
-// Listar assinantes
-async function listarAssinantes() {
-  const lista = document.getElementById("listaAssinantes");
-  lista.innerHTML = "";
+// ---------- REALTIME FIRESTORE ----------
+function escutarPendencia() {
   if (!pendenciaId) return;
 
-  try {
-    const querySnapshot = await getDocs(collection(db, "pendencias", pendenciaId, "assinantes"));
+  const assinantesRef = collection(db, "pendencias", pendenciaId, "assinantes");
+  const q = query(assinantesRef);
+
+  onSnapshot(q, snap => {
+    const lista = document.getElementById("listaAssinantes");
+    lista.innerHTML = "";
     let todosAssinaram = true;
 
-    querySnapshot.forEach(docSnap => {
+    snap.forEach(docSnap => {
       const a = docSnap.data();
       const li = document.createElement("li");
 
@@ -144,11 +147,8 @@ async function listarAssinantes() {
     });
 
     // Atualizar status da pendência
-    const refPend = doc(db, "pendencias", pendenciaId);
-    await updateDoc(refPend, { status: todosAssinaram ? "CONCLUIDO" : "PENDENTE" });
-  } catch(err) {
-    console.error(err);
-  }
+    updateDoc(doc(db, "pendencias", pendenciaId), { status: todosAssinaram ? "CONCLUIDO" : "PENDENTE" });
+  });
 }
 
 // Preparar assinatura (selecionar assinante)
@@ -186,7 +186,6 @@ document.getElementById("btnAssinar").onclick = async () => {
     });
 
     limparCanvas();
-    listarAssinantes();
     alert("Assinatura registrada com sucesso!");
   } catch(err) {
     console.error(err);
@@ -201,9 +200,8 @@ const aid = params.get("assinanteId");
 if (pid && aid) {
   pendenciaId = pid;
   assinanteAtual = aid;
-  listarAssinantes();
+  escutarPendencia();
 }
 </script>
-
 </body>
 </html>
