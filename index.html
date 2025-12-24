@@ -6,7 +6,11 @@
 
 <style>
 body { font-family: Arial; margin: 20px }
-canvas { border: 1px solid #000; cursor: crosshair; touch-action: none }
+canvas {
+  border: 1px solid #000;
+  cursor: crosshair;
+  touch-action: none; /* FUNDAMENTAL */
+}
 button { margin: 5px }
 #qrcode { margin-top: 15px }
 </style>
@@ -20,7 +24,7 @@ button { margin: 5px }
   <label>Nome do assinante:</label><br>
   <input id="nome" placeholder="Nome completo"><br><br>
 
-  <canvas id="canvas" width="300" height="150"></canvas><br>
+  <canvas id="canvas" width="320" height="160"></canvas><br>
 
   <button onclick="assinar()">Assinar nesta tela</button>
   <button onclick="gerarQRCode()">Assinar por outro dispositivo</button>
@@ -41,7 +45,26 @@ const pendencia = {
   assinaturas: []
 };
 
-let canvas, ctx, desenhando = false;
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
+let desenhando = false;
+
+// ================= POINTER EVENTS (SOLUÇÃO) =================
+canvas.addEventListener("pointerdown", e => {
+  desenhando = true;
+  ctx.beginPath();
+  ctx.moveTo(e.offsetX, e.offsetY);
+  canvas.setPointerCapture(e.pointerId);
+});
+
+canvas.addEventListener("pointermove", e => {
+  if (!desenhando) return;
+  ctx.lineTo(e.offsetX, e.offsetY);
+  ctx.stroke();
+});
+
+canvas.addEventListener("pointerup", () => desenhando = false);
+canvas.addEventListener("pointerleave", () => desenhando = false);
 
 // ================= HASH =================
 async function gerarHash(texto) {
@@ -50,48 +73,6 @@ async function gerarHash(texto) {
   return Array.from(new Uint8Array(hash))
     .map(b => b.toString(16).padStart(2, "0"))
     .join("");
-}
-
-// ================= CANVAS INIT =================
-function iniciarCanvas() {
-  canvas = document.getElementById("canvas");
-  ctx = canvas.getContext("2d");
-
-  ctx.lineWidth = 2;
-  ctx.lineCap = "round";
-
-  canvas.onmousedown = () => {
-    desenhando = true;
-    ctx.beginPath();
-  };
-
-  canvas.onmouseup = () => desenhando = false;
-
-  canvas.onmousemove = e => {
-    if (!desenhando) return;
-    ctx.lineTo(e.offsetX, e.offsetY);
-    ctx.stroke();
-  };
-
-  // MOBILE
-  canvas.ontouchstart = e => {
-    desenhando = true;
-    const t = e.touches[0];
-    const r = canvas.getBoundingClientRect();
-    ctx.beginPath();
-    ctx.moveTo(t.clientX - r.left, t.clientY - r.top);
-  };
-
-  canvas.ontouchmove = e => {
-    if (!desenhando) return;
-    const t = e.touches[0];
-    const r = canvas.getBoundingClientRect();
-    ctx.lineTo(t.clientX - r.left, t.clientY - r.top);
-    ctx.stroke();
-    e.preventDefault();
-  };
-
-  canvas.ontouchend = () => desenhando = false;
 }
 
 // ================= QR CODE =================
@@ -142,9 +123,6 @@ async function assinar() {
   document.getElementById("status").innerText = pendencia.status;
   document.getElementById("hash").innerText = "Hash SHA-256: " + hash;
 }
-
-// ================= START =================
-iniciarCanvas();
 </script>
 
 </body>
