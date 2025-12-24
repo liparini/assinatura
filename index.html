@@ -1,54 +1,222 @@
 <!DOCTYPE html>
-<html lang="pt-br">
+<html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<title>Documento com Assinatura</title>
-<script src="https://cdn.jsdelivr.net/npm/qrcodejs/qrcode.min.js"></script>
-</head>
-<body>
+<title>Assinatura Local ou Externa</title>
 
-<h2>Documento</h2>
-<p>Documento de autorização</p>
+<style>
+body { font-family: Arial; margin: 30px; }
+input, button { padding: 8px; margin: 5px 0; }
+button { cursor: pointer; }
 
-<button onclick="gerarQRCode()">Gerar QR Code para assinatura</button>
-
-<div id="qrcode"></div>
-
-<h3>Assinaturas</h3>
-<div id="assinaturas"></div>
-
-<script>
-const documentoId = "doc123"; // pode ser dinâmico
-
-function gerarQRCode() {
-  document.getElementById("qrcode").innerHTML = "";
-
-  const url = `https://SEU-USUARIO.github.io/SEU-REPOSITORIO/sign.html?doc=${documentoId}`;
-
-  new QRCode(document.getElementById("qrcode"), {
-    text: url,
-    width: 200,
-    height: 200
-  });
+.assinatura {
+  border: 1px solid #ccc;
+  padding: 10px;
+  margin-top: 10px;
 }
 
-async function carregarAssinaturas() {
-  const res = await fetch(`http://localhost:3000/assinaturas/${documentoId}`);
-  const dados = await res.json();
+.pendente { color: orange; font-weight: bold; }
+.recebida { color: green; font-weight: bold; }
 
-  const div = document.getElementById("assinaturas");
-  div.innerHTML = "";
+img { border: 1px solid #000; margin-top: 5px; }
 
-  dados.forEach(a => {
-    div.innerHTML += `
-      <p><strong>${a.nome}</strong></p>
-      <img src="${a.assinatura}" width="200">
-      <hr>
+#popup {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.6);
+  justify-content: center;
+  align-items: center;
+}
+
+#box {
+  background: white;
+  padding: 20px;
+  width: 360px;
+  text-align: center;
+}
+
+canvas { border: 1px solid #000; }
+
+#qr { margin-top: 15px; }
+</style>
+</head>
+
+<body>
+
+<h2>Assinatura Externa</h2>
+
+<label>Nome do assinante:</label><br>
+<input id="nome" placeholder="Nome completo"><br>
+
+<button onclick="adicionar()">Adicionar assinante</button>
+
+<h3>Assinaturas</h3>
+<div id="lista"></div>
+
+<br>
+<button onclick="assinarLocal()">Assinar nesta tela</button>
+<button onclick="gerarQRCode()">Assinar por outro dispositivo</button>
+
+<div id="qr"></div>
+
+<!-- POPUP ASSINATURA -->
+<div id="popup">
+  <div id="box">
+    <h3 id="titulo"></h3>
+
+    <canvas id="canvas" width="300" height="120"></canvas><br>
+    <button onclick="limpar()">Limpar</button><br><br>
+
+    <button onclick="confirmar()">Confirmar assinatura</button>
+  </div>
+</div>
+
+<!-- QR CODE -->
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+
+<script>
+let assinaturas = JSON.parse(localStorage.getItem("assinaturas")) || [];
+let atual = null;
+
+// -------------------------
+function salvar() {
+  localStorage.setItem("assinaturas", JSON.stringify(assinaturas));
+}
+
+// -------------------------
+function adicionar() {
+  if (!nome.value.trim()) return alert("Informe o nome");
+  assinaturas.push({
+    id: Date.now(),
+    nome: nome.value,
+    status: "Pendente",
+    hash: null,
+    data: null,
+    imagem: null
+  });
+  nome.value = "";
+  salvar();
+  render();
+}
+
+// -------------------------
+function render() {
+  lista.innerHTML = "";
+  assinaturas.forEach(a => {
+    lista.innerHTML += `
+      <div class="assinatura">
+        <strong>${a.nome}</strong><br>
+        Status:
+        <span class="${a.status === "Recebida" ? "recebida" : "pendente"}">
+          ${a.status}
+        </span><br>
+        ${a.data || ""}<br>
+        ${a.hash ? "<small>"+a.hash+"</small><br>" : ""}
+        ${a.imagem ? `<img src="${a.imagem}" width="200">` : ""}
+      </div>
     `;
   });
 }
+render();
 
-setInterval(carregarAssinaturas, 3000);
+// -------------------------
+// ASSINAR LOCAL
+// -------------------------
+function assinarLocal() {
+  atual = assinaturas.find(a => a.status === "Pendente");
+  if (!atual) return alert("Nenhuma assinatura pendente");
+
+  abrirPopup(atual.nome);
+}
+
+// -------------------------
+// QR CODE (ASSINATURA EXTERNA)
+// -------------------------
+function gerarQRCode() {
+  atual = assinaturas.find(a => a.status === "Pendente");
+  if (!atual) return alert("Nenhuma assinatura pendente");
+
+  const url = `${location.origin}${location.pathname}?assinar=${atual.id}`;
+
+  qr.innerHTML = "<h4>Escaneie para assinar</h4>";
+  new QRCode(qr, { text: url, width: 180, height: 180 });
+}
+
+// -------------------------
+// VERIFICA SE VEIO DO QR CODE
+// -------------------------
+const params = new URLSearchParams(location.search);
+const idExterno = params.get("assinar");
+
+if (idExterno) {
+  atual = assinaturas.find(a => a.id == idExterno);
+  if (atual && atual.status === "Pendente") {
+    abrirPopup(atual.nome);
+  }
+}
+
+// -------------------------
+function abrirPopup(nome) {
+  titulo.innerText = "Assinante: " + nome;
+  limpar();
+  popup.style.display = "flex";
+}
+
+// -------------------------
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
+let desenhando = false;
+
+canvas.onmousedown = e => {
+  desenhando = true;
+  ctx.beginPath();
+  const r = canvas.getBoundingClientRect();
+  ctx.moveTo(e.clientX - r.left, e.clientY - r.top);
+};
+
+canvas.onmousemove = e => {
+  if (!desenhando) return;
+  const r = canvas.getBoundingClientRect();
+  ctx.lineTo(e.clientX - r.left, e.clientY - r.top);
+  ctx.stroke();
+};
+
+canvas.onmouseup = () => desenhando = false;
+canvas.onmouseleave = () => desenhando = false;
+
+function limpar() {
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+}
+
+// -------------------------
+// CONFIRMAR ASSINATURA
+// -------------------------
+async function confirmar() {
+  const imagem = canvas.toDataURL("image/png");
+
+  const dados =
+    atual.nome +
+    imagem +
+    new Date().toISOString();
+
+  const hashBuffer = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(dados)
+  );
+
+  atual.hash = [...new Uint8Array(hashBuffer)]
+    .map(b => b.toString(16).padStart(2,"0"))
+    .join("");
+
+  atual.imagem = imagem;
+  atual.data = new Date().toLocaleString();
+  atual.status = "Recebida";
+
+  salvar();
+  popup.style.display = "none";
+  render();
+}
 </script>
 
 </body>
