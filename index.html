@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sistema de Assinatura Digital</title>
+    <title>Sistema de Assinatura Digital Profissional</title>
     <style>
         body { font-family: sans-serif; padding: 20px; max-width: 700px; margin: auto; background-color: #f4f4f9; color: #333; }
         .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 20px; }
@@ -29,7 +29,7 @@
     <label>Inclua nome completo do usuário externo:</label>
     <input id="nomeAssinante" placeholder="Ex: João Silva Sauro">
     <button id="btnAdicionarAssinante">Adicionar e Gerar QR Code</button>
-    <button id="btnExportarPDF" class="btn-pdf hidden">Exportar Relatório PDF</button>
+    <button id="btnExportarPDF" class="btn-pdf hidden">Exportar Relatório PDF (Completo)</button>
 </div>
 
 <div class="card hidden" id="containerAssinatura">
@@ -53,7 +53,6 @@
 
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js"></script>
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.7.0/firebase-app.js";
@@ -72,55 +71,37 @@ const db = getFirestore(app);
 let pendenciaId = null;
 let assinanteLogadoId = null;
 
-// Captura parâmetros da URL
 const params = new URLSearchParams(window.location.search);
 const pURL = params.get("p");
 const aURL = params.get("a");
 
-// --- CONTROLE DE TELAS (CORREÇÃO DOS BUGS) ---
 async function inicializarApp() {
     if (pURL && aURL) {
-        // Usuário acessando via QR CODE
         pendenciaId = pURL;
         assinanteLogadoId = aURL;
-        
         const snap = await getDoc(doc(db, "pendencias", pendenciaId));
         const user = snap.data().assinantes.find(x => x.id === assinanteLogadoId);
-        
         if (user && user.status === "PENDENTE") {
-            // Se ainda não assinou, mostra o painel de assinatura
             document.getElementById("containerAssinatura").classList.remove("hidden");
             document.getElementById("infoAssinatura").innerHTML = `Assinando como: <b>${user.nome}</b>`;
             document.getElementById("btnAssinar").disabled = false;
-        } else {
-            // Se já assinou, mantém o painel de assinatura OCULTO
-            document.getElementById("containerAssinatura").classList.add("hidden");
         }
         document.getElementById("areaGerenciamento").classList.add("hidden");
         escutarPendencia();
     } else {
-        // Modo ADMINISTRADOR (PC)
         document.getElementById("areaGerenciamento").classList.remove("hidden");
-        document.getElementById("containerAssinatura").classList.add("hidden");
-        // Se houver um ID salvo localmente (persistência de sessão admin), carrega a lista
         const idSalvo = localStorage.getItem("pendenciaAtiva");
-        if(idSalvo) {
-            pendenciaId = idSalvo;
-            escutarPendencia();
-        }
+        if(idSalvo) { pendenciaId = idSalvo; escutarPendencia(); }
     }
 }
 
-// --- LOGICA DO QR CODE ---
 window.gerarNovoQR = (id, nome) => {
     document.getElementById("qrcodeArea").classList.remove("hidden");
-    document.getElementById("nomeNoQr").textContent = "Link para: " + nome;
     const url = `${window.location.origin}${window.location.pathname}?p=${pendenciaId}&a=${id}`;
     document.getElementById("qrcode").innerHTML = "";
     new QRCode(document.getElementById("qrcode"), { text: url, width: 200, height: 200 });
 };
 
-// --- LOGICA DO CANVAS ---
 const canvas = document.getElementById("canvas");
 const ctx = canvas.getContext("2d");
 let desenhando = false;
@@ -131,33 +112,27 @@ function obterPosicao(e) {
     const cy = e.touches ? e.touches[0].clientY : e.clientY;
     return { x: (cx - rect.left) * (canvas.width / rect.width), y: (cy - rect.top) * (canvas.height / rect.height) };
 }
-const iniciar = (e) => { desenhando = true; const p = obterPosicao(e); ctx.beginPath(); ctx.moveTo(p.x, p.y); if(e.cancelable) e.preventDefault(); };
-const mover = (e) => { if (!desenhando) return; const p = obterPosicao(e); ctx.lineTo(p.x, p.y); ctx.stroke(); if(e.cancelable) e.preventDefault(); };
-canvas.addEventListener("touchstart", iniciar, {passive: false});
-canvas.addEventListener("touchmove", mover, {passive: false});
-canvas.addEventListener("mousedown", iniciar);
-canvas.addEventListener("mousemove", mover);
+canvas.addEventListener("touchstart", (e) => { desenhando = true; ctx.beginPath(); const p = obterPosicao(e); ctx.moveTo(p.x, p.y); if(e.cancelable) e.preventDefault(); }, {passive: false});
+canvas.addEventListener("touchmove", (e) => { if(!desenhando) return; const p = obterPosicao(e); ctx.lineTo(p.x, p.y); ctx.stroke(); if(e.cancelable) e.preventDefault(); }, {passive: false});
+canvas.addEventListener("mousedown", (e) => { desenhando = true; ctx.beginPath(); const p = obterPosicao(e); ctx.moveTo(p.x, p.y); });
+canvas.addEventListener("mousemove", (e) => { if(!desenhando) return; const p = obterPosicao(e); ctx.lineTo(p.x, p.y); ctx.stroke(); });
 window.addEventListener("mouseup", () => desenhando = false);
 window.limparCanvas = () => ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-// --- FIREBASE EVENTOS ---
 document.getElementById("btnAdicionarAssinante").onclick = async () => {
     const nome = document.getElementById("nomeAssinante").value.trim();
     if (!nome) return alert("Digite o nome.");
-
     if (!pendenciaId) {
         const docRef = await addDoc(collection(db, "pendencias"), { status: "PENDENTE", criadoEm: serverTimestamp(), assinantes: [] });
         pendenciaId = docRef.id;
         localStorage.setItem("pendenciaAtiva", pendenciaId);
         escutarPendencia();
     }
-
     const novoId = crypto.randomUUID();
     const snap = await getDoc(doc(db, "pendencias", pendenciaId));
     await updateDoc(doc(db, "pendencias", pendenciaId), { 
         assinantes: [...snap.data().assinantes, { id: novoId, nome, status: "PENDENTE", imagem: "", hash: "", dataHora: "" }] 
     });
-    
     window.gerarNovoQR(novoId, nome);
     document.getElementById("nomeAssinante").value = "";
 };
@@ -169,25 +144,17 @@ function escutarPendencia() {
         const lista = document.getElementById("listaAssinantes");
         lista.innerHTML = "";
         let assinados = 0;
-
         dados.assinantes.forEach(a => {
             const li = document.createElement("li");
             if (a.status === "ASSINADO") {
                 assinados++;
-                li.innerHTML = `
-                    <span class="assinado">✓ ${a.nome}</span><br>
-                    <small>${a.dataHora}</small>
-                    <div class="hash-text">SHA256: ${a.hash}</div>
-                    <div class="assinatura-preview"><img src="${a.imagem}" /></div>
-                `;
+                li.innerHTML = `<span class="assinado">✓ ${a.nome}</span><br><small>${a.dataHora}</small><div class="hash-text">SHA256: ${a.hash}</div><div class="assinatura-preview"><img src="${a.imagem}" /></div>`;
             } else {
-                // SÓ MOSTRA BOTÃO DE GERAR QR SE NÃO ESTIVER NO MODO ASSINANTE
                 let btn = (!pURL) ? `<button onclick="gerarNovoQR('${a.id}','${a.nome}')" style="width:auto; padding:5px 10px;">Exibir QR</button>` : "Aguardando...";
                 li.innerHTML = `<div><strong>${a.nome}</strong> (Pendente)</div> ${btn}`;
             }
             lista.appendChild(li);
         });
-
         if (assinados > 0 && !pURL) document.getElementById("btnExportarPDF").classList.remove("hidden");
     });
 }
@@ -196,43 +163,75 @@ document.getElementById("btnAssinar").onclick = async () => {
     const imgData = canvas.toDataURL("image/png");
     const hashBuffer = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(imgData));
     const hashHex = Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
-    
     const snap = await getDoc(doc(db, "pendencias", pendenciaId));
     const novosAssinantes = snap.data().assinantes.map(a => 
         a.id === assinanteLogadoId ? { ...a, status: "ASSINADO", imagem: imgData, hash: hashHex, dataHora: new Date().toLocaleString('pt-BR') } : a
     );
-
     await updateDoc(doc(db, "pendencias", pendenciaId), { assinantes: novosAssinantes });
     alert("Assinatura registrada!");
-    
-    // OCULTA O PAINEL DE ASSINATURA IMEDIATAMENTE APÓS ASSINAR
     document.getElementById("containerAssinatura").classList.add("hidden");
 };
 
-// --- PDF ---
+// --- PDF FORMATADO IGUAL AO HISTÓRICO ---
 document.getElementById("btnExportarPDF").onclick = async () => {
     const { jsPDF } = window.jspdf;
     const pdf = new jsPDF();
     const snap = await getDoc(doc(db, "pendencias", pendenciaId));
     const dados = snap.data();
 
-    pdf.text("Relatório de Assinaturas", 14, 20);
-    const rows = dados.assinantes.map(a => [a.nome, a.status, a.dataHora || "-"]);
-    pdf.autoTable({ head: [["Nome", "Status", "Data/Hora"]], body: rows, startY: 25 });
+    pdf.setFontSize(18);
+    pdf.setTextColor(0, 86, 179);
+    pdf.text("Relatório de Assinaturas Digitais", 14, 20);
     
-    let y = pdf.lastAutoTable.finalY + 10;
-    dados.assinantes.filter(a => a.status === "ASSINADO").forEach(a => {
-        if (y > 240) { pdf.addPage(); y = 20; }
-        pdf.text(`Assinatura: ${a.nome}`, 14, y);
-        pdf.addImage(a.imagem, 'PNG', 14, y + 2, 40, 15);
-        y += 35;
+    pdf.setFontSize(10);
+    pdf.setTextColor(100);
+    pdf.text(`ID do Documento: ${pendenciaId}`, 14, 28);
+    pdf.text(`Gerado em: ${new Date().toLocaleString('pt-BR')}`, 14, 33);
+    
+    let y = 45;
+
+    dados.assinantes.forEach((a, index) => {
+        // Verifica se precisa de nova página
+        if (y > 230) { pdf.addPage(); y = 20; }
+
+        // Borda ou Linha divisória
+        pdf.setDrawColor(200);
+        pdf.line(14, y, 196, y);
+        y += 10;
+
+        if (a.status === "ASSINADO") {
+            pdf.setFontSize(12);
+            pdf.setTextColor(40, 167, 69); // Verde
+            pdf.text(`✓ ASSINADO: ${a.nome}`, 14, y);
+            
+            y += 6;
+            pdf.setFontSize(9);
+            pdf.setTextColor(100);
+            pdf.text(`Data/Hora: ${a.dataHora}`, 14, y);
+            
+            y += 6;
+            pdf.setFontSize(8);
+            pdf.setTextColor(130);
+            pdf.setFont("courier", "normal");
+            pdf.text(`HASH SHA256: ${a.hash}`, 14, y);
+            
+            y += 5;
+            // Desenho da Assinatura
+            pdf.addImage(a.imagem, 'PNG', 14, y, 50, 20);
+            y += 25;
+        } else {
+            pdf.setFontSize(12);
+            pdf.setTextColor(200, 0, 0); // Vermelho
+            pdf.text(`${a.nome} (PENDENTE)`, 14, y);
+            y += 15;
+        }
+        pdf.setFont("helvetica", "normal");
     });
-    pdf.save("documento.pdf");
+
+    pdf.save(`Relatorio_Assinaturas_${pendenciaId}.pdf`);
 };
 
-// Iniciar aplicação
 inicializarApp();
-
 </script>
 </body>
 </html>
